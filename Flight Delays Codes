@@ -1,0 +1,1187 @@
+setwd("C:/Users/marvi/Downloads/flight_delay/ot_delaycause1_DL")
+
+library(car)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(readr)
+library(haven)
+library(lmtest)
+library(viridis)
+library(mgcv)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(glmnet)
+library(spikeslab)
+library(e1071)
+library(class)
+library(sandwich)
+
+
+# Loading the flight delay CSV into R
+# Loading the flight delay dataset containing critical information about flight delays and their causes.
+# This dataset serves as the foundation for understanding patterns and identifying factors influencing delays.
+Delays <- read.csv("Airline_Delay_Cause.csv", header = TRUE)
+
+# View the dataset
+head(Delays)
+summary(Delays)
+head(Delays)
+summary(Delays)
+
+#Null Hypothesis (H₀): Airport congestion, weather, and operational issues have no significant effect on flight delays.
+#Alternative Hypothesis (H₁): Airport congestion, weather, and operational issues significantly affect flight delays.
+
+
+#Clean the data
+# Creating a new variable, `total_delay`, to work with the delays from all sources for each flight.
+# Calculating `delay_ratio` to normalize delays based on the number of arriving flights.
+# Dropping rows with missing values to ensure the dataset is clean and ready for analysis.
+Delays <- Delays %>%
+  mutate(
+    total_delay = carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay,
+    delay_ratio = total_delay / arr_flights
+  ) %>%
+  drop_na(total_delay, arr_flights)
+
+#Creation of Subsets
+# Focusing on Atlanta (ATL), one of the busiest hubs, to analyze specific patterns and identify localized causes of delays.
+Delays_subset <- Delays %>% filter(airport == "ATL")
+
+#Summarize the Data in to Average delay by airport
+# Grouping data by airport to calculate average delays and flights for each location.
+# Sorting airports by their average delay to identify which ones experience the most significant issues.
+delay_summary <- Delays %>%
+  group_by(airport_name) %>%
+  summarize(
+    avg_delay = mean(total_delay, na.rm = TRUE),
+    avg_flights = mean(arr_flights, na.rm = TRUE)
+  ) %>%
+  arrange(desc(avg_delay))
+
+print(delay_summary)
+
+# Visualization 1: Average Total Delay by Carrier
+# Plotting average delays by carrier to determine which airlines have the highest average delays.
+# This visualization helps identify carriers with operational inefficiencies that contribute to delays.
+p_carrier_delay <- ggplot(
+  data = Delays,
+  mapping = aes(
+    x = reorder(carrier_name, total_delay, FUN = mean),  # Order by mean total_delay
+    y = total_delay,
+    fill = carrier_name
+  )
+) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(
+    x = "Carrier",
+    y = "Average Total Delay",
+    fill = "Carrier",
+    title = "Average Total Delay by Carrier",
+    subtitle = "Carriers ordered by increasing average total delay"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Tilt x-axis labels
+    panel.background = element_blank(),  # Clean background
+    panel.grid.major = element_line(color = "grey90")
+  ) +
+  scale_fill_manual(
+    values = scales::hue_pal()(length(unique(Delays$carrier_name)))  # Automatically generate colors
+  )
+
+print(p_carrier_delay)
+
+#The dataset is filtered to the top 6 carriers by average delay
+Delays_top_6 <- Delays %>%
+  group_by(carrier_name) %>%
+  summarise(avg_delay = mean(total_delay, na.rm = TRUE)) %>%
+  top_n(6, avg_delay) %>%
+  arrange(desc(avg_delay))
+
+# Visualization for Top 6 Carriers with Largest Average Delays
+top6_carrier_delay <- ggplot(
+  data = Delays_top_6,
+  mapping = aes(
+    x = reorder(carrier_name, avg_delay),  
+    y = avg_delay,
+    fill = carrier_name
+  )
+) +
+  geom_bar(stat = "identity") + 
+  geom_text(
+    aes(label = round(avg_delay, 1)),  
+    vjust = -0.5
+  ) +
+  labs(
+    x = "Carrier",
+    y = "Average Total Delay",
+    fill = "Carrier",
+    title = "Top 6 Carriers by Average Total Delay",
+    subtitle = "Focusing on carriers with the largest average delays"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  
+    panel.background = element_blank(), 
+    panel.grid.major = element_line(color = "grey90")
+  ) +
+  scale_fill_manual(
+    values = scales::hue_pal()(6)  
+  )
+
+print(top6_carrier_delay)
+
+#visulization 2
+
+# Step 1: Summarize total delays by airport and select the top 10
+top_airports <- Delays %>%
+  group_by(airport) %>%  # Use airport codes instead of names
+  summarize(total_flight_delays = sum(total_delay, na.rm = TRUE)) %>%
+  arrange(desc(total_flight_delays)) %>%
+  slice_head(n = 10)  # Select top 10 airports
+
+# Step 2: Filter the main dataset for the top 10 airports
+Delays_top_10 <- Delays %>%
+  filter(airport %in% top_airports$airport)
+
+# Step 3: Create a bar plot for the top 10 airports using airport codes
+p_top_airports <- ggplot(Delays_top_10, aes(
+  x = reorder(airport, -total_delay, FUN = sum),
+  y = total_delay,
+  fill = airport
+)) +
+  geom_bar(stat = "summary", fun = "sum") +
+  geom_text(
+    stat = "summary",
+    fun = "sum",
+    aes(label = round(..y.., 0)), 
+    vjust = -0.5
+  ) +
+  labs(
+    title = "Top 10 Airports by Total Flight Delays (Using Codes)",
+    x = "Airport Code",
+    y = "Total Delays (minutes)",
+    fill = "Airport Code"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 75, hjust = 1),  
+    panel.grid.major = element_line(color = "grey90")   
+  ) +
+  scale_fill_viridis_d(option = "plasma", end = 0.85)  
+
+print(p_top_airports)
+
+# Proportion of Different Delay Types
+delay_proportion <- Delays %>%
+  pivot_longer(cols = c(carrier_delay, weather_delay, nas_delay, security_delay, late_aircraft_delay),
+               names_to = "delay_type", values_to = "delay_value") %>%
+  group_by(delay_type) %>%
+  summarize(total_delay = sum(delay_value, na.rm = TRUE))
+
+# Visualization 3: Bar Plot of Delay Types
+p_delay_type <- ggplot(delay_proportion, aes(x = delay_type, y = total_delay, fill = delay_type)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Delay Type", y = "Total Delay (Minutes)", fill = "Delay Type", title = "Delay Types by the Minutes" , subtitle = "Feb. 2018 - Feb.2023") +
+  scale_fill_viridis_d(option = "plasma", end = 0.75)
+
+print(p_delay_type)
+
+# Regression Analysis: Predicting Total Delays
+# Fitting a linear regression model to examine how arrivals, weather, and airspace issues predict total delays.
+# This analysis quantifies the impact of each factor and tests hypotheses about their significance.
+model_delay <- lm(total_delay ~ arr_flights + weather_ct + nas_ct, data = Delays)
+print(summary(model_delay))
+
+# GAM Analysis: Smooth Relationships
+# Using GAM to model potential non-linear relationships between predictors and total delays.
+# GAM captures more complex patterns that may not be evident in a standard linear regression model.
+model_gam <- gam(total_delay ~ s(arr_flights) + s(weather_ct) + s(nas_ct), data = Delays)
+print(summary(model_gam))
+
+# Plot Smooth Relationships from GAM
+plot(model_gam, pages = 1, all.terms = TRUE)
+
+# Data Cleaning and Transformation
+Delays <- Delays %>%
+  mutate(
+    total_delay = carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay,
+    delay_ratio = total_delay / arr_flights
+  ) %>%
+  drop_na(total_delay, arr_flights)
+
+#Analyze the relationship between these factors and total delays.
+
+# Subset Data for Relevant Variables
+Delays_subset <- Delays %>%
+  select(airport_name, arr_flights, total_delay, weather_ct, nas_ct, late_aircraft_ct)
+
+# Descriptive Statistics
+summary_stats <- Delays_subset %>%
+  summarize(
+    avg_flights = mean(arr_flights, na.rm = TRUE),
+    avg_total_delay = mean(total_delay, na.rm = TRUE),
+    avg_weather_ct = mean(weather_ct, na.rm = TRUE),
+    avg_nas_ct = mean(nas_ct, na.rm = TRUE),
+    avg_late_aircraft_ct = mean(late_aircraft_ct, na.rm = TRUE)
+  )
+
+print(summary_stats)
+
+# Density Plot: Highlight regions of higher density
+p_delay_density <- ggplot(data = Delays_subset,
+                          mapping = aes(x = arr_flights, y = total_delay)) +
+  geom_density_2d(color = "darkgreen") + 
+  geom_point(size = 1.5, alpha = 0.5, color = "blue") +  
+  labs(
+    title = "Delays vs. Arrivals (Density Plot)",
+    x = "Number of Arrivals",
+    y = "Total Delays (Minutes)"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_line(color = "grey90")  
+  )
+
+# Print the density plot
+print(p_delay_density)
+
+# Statistical Analysis
+
+# Data Cleaning and Transformation
+Delays <- Delays %>%
+  mutate(
+    total_delay = carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay,
+    delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay")
+  ) %>%
+  drop_na(total_delay, arr_flights, weather_ct, nas_ct, late_aircraft_ct)
+
+# Normalize Numeric Variables
+norm_varb <- function(X_in) {
+  (X_in - min(X_in, na.rm = TRUE)) / (max(X_in, na.rm = TRUE) - min(X_in, na.rm = TRUE))
+}
+
+data_normalized <- data.frame(
+  norm_varb(Delays$arr_flights),
+  norm_varb(Delays$weather_ct),
+  norm_varb(Delays$nas_ct),
+  norm_varb(Delays$late_aircraft_ct)
+)
+colnames(data_normalized) <- c("arr_flights", "weather_ct", "nas_ct", "late_aircraft_ct")
+
+# Filter for Complete Cases
+good_obs <- complete.cases(data_normalized, Delays$delay_category)
+dat_use <- subset(data_normalized, good_obs)
+y_use <- subset(Delays$delay_category, good_obs)
+
+# Split into Training and Testing Data
+set.seed(12345)
+NN_obs <- sum(good_obs)
+select1 <- (runif(NN_obs) < 0.8)
+train_data <- subset(dat_use, select1)
+test_data <- subset(dat_use, !select1)
+cl_data <- y_use[select1]
+true_data <- y_use[!select1]
+
+# Add Small Noise to Break Ties
+train_data <- train_data + matrix(rnorm(n = nrow(train_data) * ncol(train_data), mean = 0, sd = 1e-6), 
+                                  nrow = nrow(train_data), ncol = ncol(train_data))
+test_data <- test_data + matrix(rnorm(n = nrow(test_data) * ncol(test_data), mean = 0, sd = 1e-6), 
+                                nrow = nrow(test_data), ncol = ncol(test_data))
+
+# k-NN Classification
+# Applying k-NN to classify flights into "High Delay" or "Low Delay" based on multiple predictors.
+# Testing various `k` values to find the optimal classification accuracy.
+for (k in seq(1, 9, by = 2)) {
+  pred_y <- knn(train = train_data, test = test_data, cl = cl_data, k = k)
+  num_correct_labels <- sum(pred_y == true_data)
+  correct_rate <- num_correct_labels / length(true_data)
+  print(c(k, correct_rate))
+}
+
+# View the dataset
+head(Delays)
+summary(Delays)
+
+# Data Cleaning and Transformation
+Delays <- Delays %>%
+  mutate(
+    total_delay = carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay,
+    log_total_delay = log1p(total_delay), 
+    delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay"),
+    month = factor(month),  
+    day_category = ifelse(month %in% c(6, 7, 8), "Summer", "Non-Summer")  
+  ) %>%
+  drop_na(total_delay, arr_flights, weather_ct, nas_ct, late_aircraft_ct)
+
+# Subset: Analyze only prime operational hours
+prime_flight_data <- Delays %>%
+  filter(arr_flights > 50 & total_delay > 0)
+
+# Define 'graph_obs' as a logical condition for filtering
+prime_flight_data$graph_obs <- prime_flight_data$total_delay > 1000 & prime_flight_data$arr_flights > 50
+
+# Summary of the dataset
+summary(prime_flight_data)
+
+# Linear Regression Model (Base Model)
+model_1 <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = prime_flight_data)
+summary(model_1)
+
+# Extended Model: Adding Month and Day Category (Seasonal Analysis)
+model_2 <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + month + day_category, 
+              data = prime_flight_data)
+summary(model_2)
+
+# Interaction Effects: Congestion and Weather
+model_3 <- lm(total_delay ~ arr_flights * weather_ct + nas_ct + late_aircraft_ct + month + day_category, 
+              data = prime_flight_data)
+summary(model_3)
+
+# Log-Transformed Model for Skewed Data
+model_4 <- lm(log_total_delay ~ arr_flights * weather_ct + nas_ct + late_aircraft_ct + month + day_category, 
+              data = prime_flight_data)
+summary(model_4)
+
+# Hypothesis Testing for Model Coefficients
+cat("\nHypothesis Testing for Model 3 (Interaction Effects):\n")
+print(coeftest(model_3, vcov = vcovHC))
+
+# Heteroskedasticity Test for Model 3
+cat("\nBreusch-Pagan Test for Heteroskedasticity:\n")
+print(bptest(model_3))
+
+# Compare Predicted Means (Original vs Log-Transformed)
+predicted_mean_3 <- mean(predict(model_3))
+predicted_mean_4 <- exp(mean(predict(model_4)))
+print(c("Predicted Mean (Model 3):", predicted_mean_3))
+print(c("Predicted Mean (Exp of Model 4):", predicted_mean_4))
+
+# Visualization: Scatterplot with Regression Line (Base Model)
+set.seed(12345)
+dat_graph <- subset(prime_flight_data, graph_obs)
+
+plot(total_delay ~ jitter(arr_flights, factor = 2), pch = 16, 
+     col = rgb(0.5, 0.5, 0.5, alpha = 0.2), ylim = c(0, 5000), data = dat_graph,
+     xlab = "Arrivals (Congestion Proxy)", ylab = "Total Delays (Minutes)")
+
+# Add Predicted Line (Base Model)
+to_be_predicted <- data.frame(
+  arr_flights = seq(min(prime_flight_data$arr_flights), max(prime_flight_data$arr_flights), length.out = 100),
+  weather_ct = mean(prime_flight_data$weather_ct),
+  nas_ct = mean(prime_flight_data$nas_ct),
+  late_aircraft_ct = mean(prime_flight_data$late_aircraft_ct),
+  month = "1",  
+  day_category = "Non-Summer"
+)
+to_be_predicted$yhat <- predict(model_3, newdata = to_be_predicted)
+lines(yhat ~ arr_flights, data = to_be_predicted, col = "blue", lwd = 2)
+
+# Seasonal Effects: Compare Predictions by Season
+to_be_predicted_summer <- to_be_predicted
+to_be_predicted_summer$day_category <- "Summer"
+to_be_predicted_summer$yhat <- predict(model_3, newdata = to_be_predicted_summer)
+
+lines(yhat ~ arr_flights, data = to_be_predicted_summer, col = "red", lwd = 2, lty = 2)
+
+legend("topright", legend = c("Non-Summer", "Summer"), col = c("blue", "red"), lty = c(1, 2), lwd = 2)
+
+# Visualize Residuals for Model 3
+par(mfrow = c(1, 1))
+plot(residuals(model_3) ~ fitted(model_3), 
+     main = "Residuals vs Fitted (Model 3)", 
+     xlab = "Fitted Values", ylab = "Residuals",
+     col = rgb(0.5, 0.5, 0.5, alpha = 0.5), pch = 16)
+abline(h = 0, col = "red", lwd = 2)
+
+#Data done in Covid-19
+
+# Data preparation for COVID-19 analysis
+# Step 1: Subset Data for 2020
+covid_data <- Delays %>% filter(year == 2020)
+
+# Summary of 2020 data
+summary(covid_data)
+
+# Step 2: Compare Delays in 2020 to Other Years
+pre_covid_data <- Delays %>% filter(year < 2020)  
+post_covid_data <- Delays %>% filter(year > 2020)  
+
+# Summary Statistics by Period
+summary_stats <- Delays %>%
+  mutate(period = case_when(
+    year < 2020 ~ "Pre-COVID",
+    year == 2020 ~ "COVID-2020",
+    year > 2020 ~ "Post-COVID"
+  )) %>%
+  group_by(period) %>%
+  summarize(
+    avg_delay = mean(total_delay, na.rm = TRUE),
+    median_delay = median(total_delay, na.rm = TRUE),
+    avg_arr_flights = mean(arr_flights, na.rm = TRUE),
+    avg_weather_ct = mean(weather_ct, na.rm = TRUE),
+    avg_nas_ct = mean(nas_ct, na.rm = TRUE)
+  )
+
+print(summary_stats)
+
+# Step 3: Visualization of Delays in 2020
+# Bar plot of average delays by year
+ggplot(Delays, aes(x = factor(year), y = total_delay, fill = factor(year))) +
+  stat_summary(fun = "mean", geom = "bar") +
+  labs(title = "Average Total Delays by Year", x = "Year", y = "Average Total Delay (Minutes)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Scatterplot for delays in 2020
+ggplot(covid_data, aes(x = arr_flights, y = total_delay)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Flight Delays During COVID-19 (2020)", x = "Arrivals (Congestion Proxy)", y = "Total Delay")
+
+# Step 4: Regression Analysis for COVID-19 (2020)
+model_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = covid_data)
+summary(model_covid)
+
+# Step 5: Compare COVID-19 Model to Pre/Post-COVID Models
+model_pre_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = pre_covid_data)
+model_post_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = post_covid_data)
+
+summary(model_pre_covid)
+summary(model_post_covid)
+
+# Step 6: Visualization of Predicted Delays by Period
+# Combine predictions
+covid_data$predicted_delay <- predict(model_covid)
+pre_covid_data$predicted_delay <- predict(model_pre_covid)
+post_covid_data$predicted_delay <- predict(model_post_covid)
+
+combined_data <- bind_rows(
+  covid_data %>% mutate(period = "COVID-2020"),
+  pre_covid_data %>% mutate(period = "Pre-COVID"),
+  post_covid_data %>% mutate(period = "Post-COVID")
+)
+
+ggplot(combined_data, aes(x = arr_flights, y = predicted_delay, color = period)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Predicted Delays by Period", x = "Arrivals (Congestion Proxy)", y = "Predicted Delay") +
+  scale_color_manual(values = c("Pre-COVID" = "blue", "COVID-2020" = "red", "Post-COVID" = "green"))
+
+# Step 7: Seasonal Analysis During 2020
+covid_seasonal <- covid_data %>%
+  mutate(season = case_when(
+    month %in% c(12, 1, 2) ~ "Winter",
+    month %in% c(3, 4, 5) ~ "Spring",
+    month %in% c(6, 7, 8) ~ "Summer",
+    month %in% c(9, 10, 11) ~ "Fall"
+  ))
+
+# **Monthly Delays by Year Graph**
+# Prepare Data for Monthly Delays by Year (2018-2023)
+monthly_delays <- Delays %>%
+  mutate(
+    Month = sprintf("%02d", month),  # Ensure Month is in "01" to "12" format
+    Year = as.factor(year)          # Ensure Year is a factor
+  ) %>%
+  group_by(Year, Month) %>%
+  summarize(total_delay = sum(total_delay, na.rm = TRUE), .groups = "drop")
+
+# Convert Month to a factor for proper order and labels
+monthly_delays$Month <- factor(
+  monthly_delays$Month,
+  levels = sprintf("%02d", 1:12),
+  labels = month.abb
+)
+
+# Plotting: Total flight delays by month for 2018-2023
+# Plotting monthly delay trends over multiple years to detect patterns.
+# This helps identify peak delay periods, which can inform scheduling and resource allocation.
+ggplot(monthly_delays, aes(x = Month, y = total_delay, color = Year, group = Year)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Total Flight Delays by Month (2018-2023)",
+    x = "Month",
+    y = "Total Delay (Minutes)",
+    color = "Year"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+# Step 1: Subset Data for COVID-2020
+covid_data <- Delays %>% filter(year == 2020)
+
+# Create Dummy Variables for Delay Category and Seasons
+covid_data <- covid_data %>%
+  mutate(
+    delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay"),
+    season = case_when(
+      month %in% c(12, 1, 2) ~ "Winter",
+      month %in% c(3, 4, 5) ~ "Spring",
+      month %in% c(6, 7, 8) ~ "Summer",
+      month %in% c(9, 10, 11) ~ "Fall"
+    )
+  )
+
+# Step 2: Polynomial Regression for COVID-2020
+model_poly <- lm(
+  total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) +
+    weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + season,
+  data = covid_data
+)
+
+# Summary of Polynomial Model
+summary(model_poly)
+
+# Step 3: Interaction Effects
+model_interaction <- lm(
+  total_delay ~ arr_flights * weather_ct + nas_ct + late_aircraft_ct +
+    delay_category * season,
+  data = covid_data
+)
+
+# Summary of Interaction Model
+summary(model_interaction)
+
+# Step 4: Log-Transformed Model for Skewed Data (COVID-2020)
+covid_data <- covid_data %>% mutate(log_total_delay = log1p(total_delay))
+
+model_log <- lm(
+  log_total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) +
+    weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + season,
+  data = covid_data
+)
+
+# Summary of Log-Transformed Model
+summary(model_log)
+
+# Step 5: Comparative Analysis (Pre-, COVID-, and Post-COVID Periods)
+# Subset data for pre- and post-COVID periods
+pre_covid_data <- Delays %>% filter(year < 2020)
+post_covid_data <- Delays %>% filter(year > 2020)
+
+# Fit regression models for each period
+model_pre_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = pre_covid_data)
+model_post_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = post_covid_data)
+
+# Summaries of models
+summary(model_pre_covid)
+summary(model_post_covid)
+
+# Step 6: Hypothesis Testing and Joint Significance (COVID-2020)
+# Hypothesis Test for Higher-Order Terms in Polynomial Model
+linearHypothesis(model_poly, c("I(arr_flights^2) = 0", "I(arr_flights^3) = 0"))
+
+# Breusch-Pagan Test for Heteroskedasticity
+bptest(model_poly)
+
+# Step 7: Visualization
+# Compare Predicted Delays Across Periods
+covid_data$predicted_delay <- predict(model_poly)
+pre_covid_data$predicted_delay <- predict(model_pre_covid)
+post_covid_data$predicted_delay <- predict(model_post_covid)
+
+combined_data <- bind_rows(
+  covid_data %>% mutate(period = "COVID-2020"),
+  pre_covid_data %>% mutate(period = "Pre-COVID"),
+  post_covid_data %>% mutate(period = "Post-COVID")
+)
+
+# Visualization: Predicted Delays by Period
+ggplot(combined_data, aes(x = arr_flights, y = predicted_delay, color = period)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Predicted Delays by Period", x = "Arrivals (Congestion Proxy)", y = "Predicted Delay") +
+  scale_color_manual(values = c("Pre-COVID" = "blue", "COVID-2020" = "red", "Post-COVID" = "green"))
+
+# Visualization: Residuals for Polynomial Model
+par(mfrow = c(1, 1))
+plot(residuals(model_poly) ~ fitted(model_poly),
+     main = "Residuals vs Fitted (Polynomial Model)",
+     xlab = "Fitted Values", ylab = "Residuals", col = rgb(0.5, 0.5, 0.5, alpha = 0.5), pch = 16)
+abline(h = 0, col = "red", lwd = 2)
+
+# Visualization: Seasonal Analysis (COVID-2020)
+covid_seasonal <- covid_data %>%
+  mutate(season = case_when(
+    month %in% c(12, 1, 2) ~ "Winter",
+    month %in% c(3, 4, 5) ~ "Spring",
+    month %in% c(6, 7, 8) ~ "Summer",
+    month %in% c(9, 10, 11) ~ "Fall"
+  ))
+
+ggplot(covid_seasonal, aes(x = season, y = total_delay, fill = season)) +
+  stat_summary(fun = "mean", geom = "bar") +
+  labs(title = "Average Delays by Season in 2020", x = "Season", y = "Average Total Delay")
+
+
+# Step 1: Data Preparation
+# Subset Data for COVID-2020
+covid_data <- Delays %>%
+  filter(year == 2020) %>%
+  mutate(
+    delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay"),
+    season = case_when(
+      month %in% c(12, 1, 2) ~ "Winter",
+      month %in% c(3, 4, 5) ~ "Spring",
+      month %in% c(6, 7, 8) ~ "Summer",
+      month %in% c(9, 10, 11) ~ "Fall"
+    )
+  ) %>%
+  drop_na(arr_flights, weather_ct, nas_ct, late_aircraft_ct, season, delay_category)
+
+# Convert `delay_category` to Factor and Clean Levels
+covid_data$delay_category <- as.factor(covid_data$delay_category)
+
+# Step 2: Ordinary Least Squares (OLS) Model
+ols_model <- lm(
+  total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + season,
+  data = covid_data
+)
+
+# OLS Model Summary
+summary(ols_model)
+
+# Step 3: Polynomial Regression
+poly_model <- lm(
+  total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) +
+    weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + season,
+  data = covid_data
+)
+
+# Polynomial Model Summary
+summary(poly_model)
+
+# Step 4: Interaction Effects
+interaction_model <- lm(
+  total_delay ~ arr_flights * weather_ct + nas_ct + late_aircraft_ct + 
+    delay_category * season,
+  data = covid_data
+)
+
+# Interaction Model Summary
+summary(interaction_model)
+
+# Step 5: Log-Transformed Model
+covid_data <- covid_data %>% mutate(log_total_delay = log1p(total_delay))
+log_model <- lm(
+  log_total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) +
+    weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + season,
+  data = covid_data
+)
+
+# Log-Transformed Model Summary
+summary(log_model)
+
+# Step 6: Hypothesis Testing for Polynomial Terms
+linearHypothesis(poly_model, c("I(arr_flights^2) = 0", "I(arr_flights^3) = 0"))
+
+# Step 7: Breusch-Pagan Test for Heteroskedasticity
+bptest(poly_model)
+
+# Step 8: Visualization
+# Residuals vs Fitted (Polynomial Model)
+par(mfrow = c(1, 1))
+plot(residuals(poly_model) ~ fitted(poly_model),
+     main = "Residuals vs Fitted (Polynomial Model)",
+     xlab = "Fitted Values", ylab = "Residuals",
+     col = rgb(0.5, 0.5, 0.5, alpha = 0.5), pch = 16)
+abline(h = 0, col = "red", lwd = 2)
+
+# Predicted Lines by Season
+to_be_predicted <- data.frame(
+  arr_flights = seq(min(covid_data$arr_flights), max(covid_data$arr_flights), length.out = 100),
+  weather_ct = mean(covid_data$weather_ct),
+  nas_ct = mean(covid_data$nas_ct),
+  late_aircraft_ct = mean(covid_data$late_aircraft_ct),
+  season = "Winter"
+)
+to_be_predicted$yhat <- predict(poly_model, newdata = to_be_predicted)
+
+plot(total_delay ~ jitter(arr_flights, factor = 2), pch = 16,
+     col = rgb(0.5, 0.5, 0.5, alpha = 0.2), ylim = c(0, 5000), data = covid_data,
+     xlab = "Arrivals (Congestion Proxy)", ylab = "Total Delays (Minutes)")
+lines(yhat ~ arr_flights, data = to_be_predicted, col = "blue", lwd = 2)
+
+to_be_predicted$season <- "Summer"
+to_be_predicted$yhat <- predict(poly_model, newdata = to_be_predicted)
+lines(yhat ~ arr_flights, data = to_be_predicted, col = "red", lwd = 2, lty = 2)
+
+legend("topright", legend = c("Winter", "Summer"), col = c("blue", "red"), lty = c(1, 2), lwd = 2)
+
+
+
+#Randomforest vs Decision tree test:
+
+
+# Step 1: Data Preparation
+covid_data <- Delays %>%
+  filter(year == 2020) %>%
+  mutate(
+    delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay"),
+    season = case_when(
+      month %in% c(12, 1, 2) ~ "Winter",
+      month %in% c(3, 4, 5) ~ "Spring",
+      month %in% c(6, 7, 8) ~ "Summer",
+      month %in% c(9, 10, 11) ~ "Fall"
+    )
+  ) %>%
+  drop_na(arr_flights, weather_ct, nas_ct, late_aircraft_ct, season, delay_category)
+
+covid_data$delay_category <- factor(covid_data$delay_category)
+covid_data$season <- factor(covid_data$season)
+
+# Step 2: Train-Test Split
+set.seed(12345)
+train_indices <- sample(1:nrow(covid_data), 0.8 * nrow(covid_data))
+train_data <- covid_data[train_indices, ]
+test_data <- covid_data[-train_indices, ]
+
+# Step 3: Decision Tree Model
+tree_model <- rpart(
+  delay_category ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + season,
+  data = train_data,
+  method = "class"
+)
+
+# Plot Decision Tree
+rpart.plot(tree_model, main = "Decision Tree for Flight Delays")
+
+# Predictions and Confusion Matrix for Decision Tree
+tree_predictions <- predict(tree_model, newdata = test_data, type = "class")
+tree_cm <- table(Predicted = tree_predictions, Actual = test_data$delay_category)
+
+# Print Results for Decision Tree
+print("Confusion Matrix - Decision Tree:")
+print(tree_cm)
+tree_accuracy <- sum(diag(tree_cm)) / sum(tree_cm)
+cat("Decision Tree Accuracy:", round(tree_accuracy, 4), "\n")
+
+# Type I and Type II Errors for Decision Tree
+tree_FP <- tree_cm[1, 2] # False Positives
+tree_FN <- tree_cm[2, 1] # False Negatives
+tree_TN <- tree_cm[2, 2] # True Negatives
+tree_TP <- tree_cm[1, 1] # True Positives
+
+tree_type1_error <- tree_FP / (tree_FP + tree_TN) # False Positive Rate
+tree_type2_error <- tree_FN / (tree_FN + tree_TP) # False Negative Rate
+
+cat("Decision Tree Type I Error (False Positive Rate):", round(tree_type1_error, 4), "\n")
+cat("Decision Tree Type II Error (False Negative Rate):", round(tree_type2_error, 4), "\n")
+
+# Step 4: Random Forest Model
+# Training a Random Forest model to classify delays and rank the importance of predictors.
+# This model is robust to overfitting and can handle complex interactions between variables.
+rf_model <- randomForest(
+  delay_category ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + season,
+  data = train_data,
+  ntree = 500,
+  mtry = 3,
+  importance = TRUE
+)
+
+# Predictions and Confusion Matrix for Random Forest
+rf_predictions <- predict(rf_model, newdata = test_data)
+rf_cm <- table(Predicted = rf_predictions, Actual = test_data$delay_category)
+
+# Print Results for Random Forest
+print("Confusion Matrix - Random Forest:")
+print(rf_cm)
+rf_accuracy <- sum(diag(rf_cm)) / sum(rf_cm)
+cat("Random Forest Accuracy:", round(rf_accuracy, 4), "\n")
+
+# Type I and Type II Errors for Random Forest
+rf_FP <- rf_cm[1, 2] # False Positives
+rf_FN <- rf_cm[2, 1] # False Negatives
+rf_TN <- rf_cm[2, 2] # True Negatives
+rf_TP <- rf_cm[1, 1] # True Positives
+
+rf_type1_error <- rf_FP / (rf_FP + rf_TN) # False Positive Rate
+rf_type2_error <- rf_FN / (rf_FN + rf_TP) # False Negative Rate
+
+cat("Random Forest Type I Error (False Positive Rate):", round(rf_type1_error, 4), "\n")
+cat("Random Forest Type II Error (False Negative Rate):", round(rf_type2_error, 4), "\n")
+
+# Step 5: Optimized Random Forest Model
+optimized_rf_model <- randomForest(
+  delay_category ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + season,
+  data = train_data,
+  ntree = 1000,
+  mtry = 2,
+  importance = TRUE
+)
+
+# Predictions and Confusion Matrix for Optimized Random Forest
+optimized_rf_predictions <- predict(optimized_rf_model, newdata = test_data)
+optimized_rf_cm <- table(Predicted = optimized_rf_predictions, Actual = test_data$delay_category)
+
+# Print Results for Optimized Random Forest
+print("Confusion Matrix - Optimized Random Forest:")
+print(optimized_rf_cm)
+optimized_rf_accuracy <- sum(diag(optimized_rf_cm)) / sum(optimized_rf_cm)
+cat("Optimized Random Forest Accuracy:", round(optimized_rf_accuracy, 4), "\n")
+
+# Type I and Type II Errors for Optimized Random Forest
+optimized_rf_FP <- optimized_rf_cm[1, 2] # False Positives
+optimized_rf_FN <- optimized_rf_cm[2, 1] # False Negatives
+optimized_rf_TN <- optimized_rf_cm[2, 2] # True Negatives
+optimized_rf_TP <- optimized_rf_cm[1, 1] # True Positives
+
+optimized_rf_type1_error <- optimized_rf_FP / (optimized_rf_FP + optimized_rf_TN) # False Positive Rate
+optimized_rf_type2_error <- optimized_rf_FN / (optimized_rf_FN + optimized_rf_TP) # False Negative Rate
+
+cat("Optimized Random Forest Type I Error (False Positive Rate):", round(optimized_rf_type1_error, 4), "\n")
+cat("Optimized Random Forest Type II Error (False Negative Rate):", round(optimized_rf_type2_error, 4), "\n")
+
+
+#Secondary hypothesis to look at when comparing the primary hypothesis
+#Use Passenger Traffic as a Proxy:
+# Secondary Hypothesis:
+# Null Hypothesis (H₀): Passenger traffic is not associated with flight delays.
+#Alternative Hypothesis (H₁): Airports with higher passenger traffic are more likely to experience longer flight delays.
+
+
+# Summarize Passenger Traffic and Delays by Airport
+traffic_delays <- Delays %>%
+  group_by(airport_name) %>%
+  summarize(
+    total_passenger_traffic = sum(arr_flights, na.rm = TRUE),
+    total_delays = sum(total_delay, na.rm = TRUE),
+    avg_delay = mean(total_delay, na.rm = TRUE)
+  ) %>%
+  arrange(desc(total_passenger_traffic))
+
+print(traffic_delays)
+
+# Scatter Plot: Passenger Traffic vs Delays
+# Plotting passenger traffic (proxy for airport size) against delays to identify relationships between traffic volume and delay magnitude.
+# This helps in understanding how congestion impacts delays across different airport sizes.
+p_traffic_vs_delays <- ggplot(traffic_delays, aes(x = total_passenger_traffic, y = total_delays)) +
+  geom_point(size = 3, alpha = 0.6, color = "blue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red", linetype = "dashed") +
+  labs(
+    title = "Passenger Traffic vs Total Delays",
+    x = "Total Passenger Traffic (Arrivals)",
+    y = "Total Delays (Minutes)"
+  ) +
+  theme_minimal()
+
+print(p_traffic_vs_delays)
+
+# Correlation Test: Passenger Traffic vs Delays
+cor_test <- cor.test(traffic_delays$total_passenger_traffic, traffic_delays$total_delays)
+print(cor_test)
+
+# Regression Analysis: Predict Delays Using Traffic
+delay_model <- lm(total_delays ~ total_passenger_traffic, data = traffic_delays)
+print(summary(delay_model))
+
+# Visualize Regression Predictions
+p_regression <- ggplot(traffic_delays, aes(x = total_passenger_traffic, y = total_delays)) +
+  geom_point(size = 3, alpha = 0.6, color = "blue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(
+    title = "Regression: Passenger Traffic Predicting Delays",
+    x = "Total Passenger Traffic (Arrivals)",
+    y = "Total Delays (Minutes)"
+  ) +
+  theme_minimal()
+
+print(p_regression)
+
+# Categorize Airports into High and Low Traffic Based on Median
+traffic_delays <- traffic_delays %>%
+  mutate(traffic_category = ifelse(total_passenger_traffic > median(total_passenger_traffic), "High", "Low"))
+
+# Boxplot: Delays by Traffic Category
+p_boxplot <- ggplot(traffic_delays, aes(x = traffic_category, y = total_delays, fill = traffic_category)) +
+  geom_boxplot() +
+  labs(
+    title = "Delays by Passenger Traffic Category",
+    x = "Traffic Category",
+    y = "Total Delays (Minutes)"
+  ) +
+  theme_minimal()
+
+print(p_boxplot)
+
+# T-Test: Compare Delays Between High and Low Traffic Airports
+t_test_result <- t.test(total_delays ~ traffic_category, data = traffic_delays)
+print(t_test_result)
+
+
+#Look at airport airport size or run way size 
+# Summarize Passenger Traffic and Delays by Airport
+size_delays_proxy <- Delays %>%
+  group_by(airport) %>%  # Group by airport code
+  summarize(
+    total_passenger_traffic = sum(arr_flights, na.rm = TRUE),  # Proxy for airport size
+    total_flight_delays = sum(total_delay, na.rm = TRUE),
+    avg_delay = mean(total_delay, na.rm = TRUE)
+  ) %>%
+  arrange(desc(total_passenger_traffic))  #The ordering of proxy passenger traffic 
+
+print(head(size_delays_proxy, 10))  # Display  proxy top airports by size
+
+# Correlation Test: Passenger Traffic vs. Total Delays
+cor_test_proxy <- cor.test(size_delays_proxy$total_passenger_traffic, size_delays_proxy$total_flight_delays)
+print(cor_test_proxy)
+
+# Scatter Plot: Passenger Traffic (Proxy for Size) vs. Total Delays
+p_proxy_vs_delay <- ggplot(size_delays_proxy, aes(x = total_passenger_traffic, y = total_flight_delays)) +
+  geom_point(size = 3, alpha = 0.6, color = "blue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red", linetype = "dashed") +
+  labs(
+    title = "Airport Size (Passenger Traffic) vs Total Flight Delays",
+    subtitle = "Using Passenger Traffic as a Proxy for Size",
+    x = "Total Passenger Traffic (Arrivals)",
+    y = "Total Flight Delays (Minutes)"
+  ) +
+  theme_minimal()
+
+print(p_proxy_vs_delay)
+
+# Regression Analysis: Predict Delays Using Passenger Traffic
+proxy_model <- lm(total_flight_delays ~ total_passenger_traffic, data = size_delays_proxy)
+print(summary(proxy_model))
+
+# Step 1: Data Cleaning and Preparation
+Delays <- Delays %>%
+  mutate(
+    # Calculate total flight delays
+    total_flight_delays = total_delay,  # Alias for consistency
+    
+    # Calculate delay ratio (delays per arrival flights)
+    delay_ratio = total_delay / arr_flights,  
+    
+    # Calculate total passenger traffic using available columns
+    total_passenger_traffic = if ("dep_flights" %in% names(Delays)) {
+      arr_flights + dep_flights
+    } else {
+      arr_flights
+    },
+    
+    # Create a `season` variable based on the month
+    season = factor(case_when(
+      month %in% c(12, 1, 2) ~ "Winter",
+      month %in% c(3, 4, 5) ~ "Spring",
+      month %in% c(6, 7, 8) ~ "Summer",
+      month %in% c(9, 10, 11) ~ "Fall"
+    ))
+  ) %>%
+  # Drop rows with missing values in the specified columns
+  drop_na(total_flight_delays, total_passenger_traffic, season, weather_ct)
+
+# Step 2: Interaction Model
+interaction_model <- lm(
+  total_flight_delays ~ total_passenger_traffic * season + weather_ct,
+  data = Delays
+)
+
+# Step 3: Dynamically Extract Coefficient Names
+coef_names <- names(coef(interaction_model))
+print("Coefficients in the model:")
+print(coef_names)
+
+# Extract specific coefficient names for interaction terms
+interaction_terms <- coef_names[grep("total_passenger_traffic:season", coef_names)]
+print("Interaction terms in the model:")
+print(interaction_terms)
+
+# Hypothesis Testing for Interaction Terms
+if (length(interaction_terms) > 0) {
+  hypothesis_results <- linearHypothesis(interaction_model, interaction_terms)
+  print("Hypothesis Testing Results for Interaction Terms:")
+  print(hypothesis_results)
+} else {
+  print("No interaction terms found for hypothesis testing.")
+}
+
+# Step 4: Visualization of Interaction Effects
+# Create a dataset for predictions
+prediction_data <- expand.grid(
+  total_passenger_traffic = seq(min(Delays$total_passenger_traffic, na.rm = TRUE), max(Delays$total_passenger_traffic, na.rm = TRUE), length.out = 100),
+  season = levels(Delays$season),
+  weather_ct = mean(Delays$weather_ct, na.rm = TRUE)
+)
+
+# Predict delays based on the interaction model
+prediction_data$predicted_delays <- predict(interaction_model, newdata = prediction_data)
+
+# Plot the interaction effects
+interaction_plot <- ggplot(prediction_data, aes(x = total_passenger_traffic, y = predicted_delays, color = season)) +
+  geom_line(size = 1.5) +
+  scale_color_manual(
+    values = c("Winter" = "blue", "Spring" = "green", "Summer" = "purple", "Fall" = "black")
+  ) +
+  labs(
+    title = "Interaction Effects: Passenger Traffic and Seasons on Flight Delays",
+    subtitle = "Analyzing the Impact of Seasons and Traffic on Delays",
+    x = "Total Passenger Traffic (Arrivals)",
+    y = "Predicted Total Flight Delays (Minutes)",
+    color = "Season"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.title = element_text(size = 12),
+    legend.position = "top",
+    legend.title = element_text(face = "bold")
+  )
+
+# Print the interaction plot
+print(interaction_plot)
+
+# Additional Visualization: Residuals for the Interaction Model
+residuals_plot <- ggplot(data = data.frame(
+  Residuals = residuals(interaction_model),
+  Fitted = fitted(interaction_model)
+), aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Residuals vs Fitted Values",
+    x = "Fitted Values",
+    y = "Residuals"
+  ) +
+  theme_minimal()
+
+# Print the residuals plot
+print(residuals_plot)
+
+# Summary of Interaction Model
+interaction_summary <- summary(interaction_model)
+print("Summary of Interaction Model:")
+print(interaction_summary)
+
+
+
+#log models for regression and polynomial functions 
+
+# Apply logarithmic transformations
+Delays <- Delays %>%
+  mutate(
+    log_total_delay = log1p(total_delay),  # Log-transformed delay (log1p handles 0)
+    log_arr_flights = log1p(arr_flights),  # Log-transformed arrivals
+    log_weather_ct = log1p(weather_ct),    # Log-transformed weather
+    log_nas_ct = log1p(nas_ct),            # Log-transformed NAS delay
+    log_late_aircraft_ct = log1p(late_aircraft_ct)  # Log-transformed late aircraft
+  )
+
+# Polynomial Regression Model (Including Log-Transformed Variables)
+poly_model_log <- lm(
+  log_total_delay ~ poly(log_arr_flights, 2) + poly(log_weather_ct, 2) + 
+    poly(log_nas_ct, 2) + poly(log_late_aircraft_ct, 2) + season,
+  data = Delays
+)
+
+# Summary of the polynomial regression model
+summary(poly_model_log)
+
+# Hypothesis testing for higher-order terms
+linearHypothesis(poly_model_log, c(
+  "poly(log_arr_flights, 2)2 = 0", 
+  "poly(log_weather_ct, 2)2 = 0"
+))
+
+# Visualization: Polynomial Regression Predictions
+predicted_poly <- data.frame(
+  arr_flights = seq(min(Delays$arr_flights), max(Delays$arr_flights), length.out = 100),
+  weather_ct = mean(Delays$weather_ct, na.rm = TRUE),
+  nas_ct = mean(Delays$nas_ct, na.rm = TRUE),
+  late_aircraft_ct = mean(Delays$late_aircraft_ct, na.rm = TRUE),
+  season = "Winter"
+)
+
+# Add log-transformed predictors
+predicted_poly <- predicted_poly %>%
+  mutate(
+    log_arr_flights = log1p(arr_flights),
+    log_weather_ct = log1p(weather_ct),
+    log_nas_ct = log1p(nas_ct),
+    log_late_aircraft_ct = log1p(late_aircraft_ct)
+  )
+
+predicted_poly$yhat <- predict(poly_model_log, newdata = predicted_poly)
+
+# Plot predictions for Polynomial Regression
+ggplot(predicted_poly, aes(x = arr_flights, y = exp(yhat) - 1)) +  # Convert back from log
+  geom_line(color = "blue", size = 1) +
+  labs(
+    title = "Polynomial Regression with Log-Transformed Variables",
+    x = "Arrivals (Congestion Proxy)",
+    y = "Predicted Total Delays (Minutes)"
+  ) +
+  theme_minimal()
+
+# Add Relevant Variables to the Dataset
+Delays <- Delays %>%
+  mutate(
+    log_total_delay = log1p(total_delay),  # Log-transformation for skewed delays
+    congestion_proxy = log1p(arr_flights),  # Log-transform arrivals for non-linear relationships
+    season = factor(case_when(
+      month %in% c(12, 1, 2) ~ "Winter",
+      month %in% c(3, 4, 5) ~ "Spring",
+      month %in% c(6, 7, 8) ~ "Summer",
+      month %in% c(9, 10, 11) ~ "Fall"
+    )),
+    operational_issues = nas_ct + late_aircraft_ct + security_delay,  # Proxy for inefficiencies
+    weather_intensity = weather_ct  # Retain weather conditions as-is
+  )
+
+# Polynomial Regression Model with Additional Factors
+poly_model <- lm(
+  log_total_delay ~ poly(congestion_proxy, 3) + weather_intensity + operational_issues + season,
+  data = Delays
+)
+
+# Summary of the Updated Model
+summary(poly_model)
+
+# Predictions for Polynomial Model
+Delays$predicted_delays <- predict(poly_model, newdata = Delays)
+
+# Visualization of the Updated Model
+ggplot(Delays, aes(x = congestion_proxy, y = log_total_delay)) +
+  geom_point(alpha = 0.3, color = "gray") +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 3), se = FALSE, color = "blue", size = 1.2) +
+  labs(
+    title = "Polynomial Regression with Additional Factors",
+    subtitle = "Examining Congestion, Weather, Seasonality, and Operational Issues",
+    x = "Log of Arrivals (Congestion Proxy)",
+    y = "Log of Total Delays (Minutes)"
+  ) +
+  theme_minimal()
+
+
+# Interaction Effects (Seasonality and Weather)
+interaction_model <- lm(
+  log_total_delay ~ poly(congestion_proxy, 3) * season + weather_intensity + operational_issues,
+  data = Delays
+)
+
+# Summary of Interaction Effects Model
+summary(interaction_model)
+
+# Plot Interaction Effects: Seasonality
+interaction_data <- expand.grid(
+  congestion_proxy = seq(min(Delays$congestion_proxy, na.rm = TRUE), max(Delays$congestion_proxy, na.rm = TRUE), length.out = 100),
+  season = levels(Delays$season),
+  weather_intensity = mean(Delays$weather_intensity, na.rm = TRUE),
+  operational_issues = mean(Delays$operational_issues, na.rm = TRUE)
+)
+interaction_data$predicted_delays <- predict(interaction_model, newdata = interaction_data)
+
+ggplot(interaction_data, aes(x = congestion_proxy, y = predicted_delays, color = season)) +
+  geom_line(size = 1.2) +
+  labs(
+    title = "Interaction Effects: Congestion and Seasonality",
+    subtitle = "Analyzing Seasonal Impacts on Flight Delays",
+    x = "Log of Arrivals (Congestion Proxy)",
+    y = "Predicted Log Total Delays (Minutes)"
+  ) +
+  theme_minimal()
+
+
+
