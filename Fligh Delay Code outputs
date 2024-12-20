@@ -1,0 +1,2335 @@
+
+> setwd("C:/Users/marvi/Downloads/flight_delay/ot_delaycause1_DL")
+> 
+> library(car)
+> library(dplyr)
+> library(ggplot2)
+> library(tidyverse)
+> library(readr)
+> library(haven)
+> library(lmtest)
+> library(viridis)
+> library(mgcv)
+> library(randomForest)
+> library(rpart)
+> library(rpart.plot)
+> library(glmnet)
+> library(spikeslab)
+> library(e1071)
+> library(class)
+> library(sandwich)
+> 
+> 
+> # Loading the flight delay CSV into R
+> # Loading the flight delay dataset containing critical information about flight delays and their causes.
+> # This dataset serves as the foundation for understanding patterns and identifying factors influencing delays.
+> Delays <- read.csv("Airline_Delay_Cause.csv", header = TRUE)
+> 
+> # View the dataset
+> head(Delays)
+  year month carrier      carrier_name airport                                          airport_name
+1 2023     2      9E Endeavor Air Inc.     ABY                Albany, GA: Southwest Georgia Regional
+2 2023     2      9E Endeavor Air Inc.     AEX              Alexandria, LA: Alexandria International
+3 2023     2      9E Endeavor Air Inc.     AGS           Augusta, GA: Augusta Regional at Bush Field
+4 2023     2      9E Endeavor Air Inc.     ALB                      Albany, NY: Albany International
+5 2023     2      9E Endeavor Air Inc.     ATL Atlanta, GA: Hartsfield-Jackson Atlanta International
+6 2023     2      9E Endeavor Air Inc.     AUS          Austin, TX: Austin - Bergstrom International
+  arr_flights arr_del15 carrier_ct weather_ct nas_ct security_ct late_aircraft_ct arr_cancelled arr_diverted
+1          68         4       1.00       0.00   3.00           0             0.00             0            0
+2          56         3       2.00       0.00   1.00           0             0.00             0            2
+3          17         2       2.00       0.00   0.00           0             0.00             0            0
+4          96        14       3.07       0.00   2.10           0             8.83             4            0
+5        1574       135      59.79       4.76  18.44           0            52.01             2            0
+6          44         4       1.00       1.00   2.00           0             0.00             0            1
+  arr_delay carrier_delay weather_delay nas_delay security_delay late_aircraft_delay
+1        89            26             0        63              0                   0
+2       140           124             0        16              0                   0
+3        52            52             0         0              0                   0
+4       683            97             0        80              0                 506
+5     16180          8647           445       517              0                6571
+6       112            28            42        42              0                   0
+> summary(Delays)
+      year          month          carrier          carrier_name         airport          airport_name      
+ Min.   :2018   Min.   : 1.000   Length:120188      Length:120188      Length:120188      Length:120188     
+ 1st Qu.:2019   1st Qu.: 3.000   Class :character   Class :character   Class :character   Class :character  
+ Median :2020   Median : 6.000   Mode  :character   Mode  :character   Mode  :character   Mode  :character  
+ Mean   :2020   Mean   : 6.422                                                                              
+ 3rd Qu.:2021   3rd Qu.: 9.000                                                                              
+ Max.   :2023   Max.   :12.000                                                                              
+                                                                                                            
+  arr_flights      arr_del15         carrier_ct        weather_ct          nas_ct         security_ct     
+ Min.   :    1   Min.   :   0.00   Min.   :   0.00   Min.   :  0.000   Min.   :   0.00   Min.   : 0.0000  
+ 1st Qu.:   34   1st Qu.:   5.00   1st Qu.:   1.60   1st Qu.:  0.000   1st Qu.:   0.73   1st Qu.: 0.0000  
+ Median :   81   Median :  13.00   Median :   4.71   Median :  0.140   Median :   2.93   Median : 0.0000  
+ Mean   :  290   Mean   :  50.87   Mean   :  16.55   Mean   :  1.877   Mean   :  14.69   Mean   : 0.1358  
+ 3rd Qu.:  188   3rd Qu.:  34.00   3rd Qu.:  12.55   3rd Qu.:  1.480   3rd Qu.:   8.40   3rd Qu.: 0.0000  
+ Max.   :21931   Max.   :4176.00   Max.   :1147.00   Max.   :226.000   Max.   :1884.42   Max.   :58.6900  
+ NA's   :256     NA's   :491       NA's   :256       NA's   :256       NA's   :256       NA's   :256      
+ late_aircraft_ct  arr_cancelled       arr_diverted        arr_delay      carrier_delay    weather_delay    
+ Min.   :   0.00   Min.   :   0.000   Min.   :  0.0000   Min.   :     0   Min.   :     0   Min.   :    0.0  
+ 1st Qu.:   0.96   1st Qu.:   0.000   1st Qu.:  0.0000   1st Qu.:   244   1st Qu.:    74   1st Qu.:    0.0  
+ Median :   3.65   Median :   1.000   Median :  0.0000   Median :   789   Median :   273   Median :    8.0  
+ Mean   :  17.51   Mean   :   7.437   Mean   :  0.6796   Mean   :  3412   Mean   :  1196   Mean   :  199.5  
+ 3rd Qu.:  10.96   3rd Qu.:   4.000   3rd Qu.:  0.0000   3rd Qu.:  2207   3rd Qu.:   856   3rd Qu.:  122.0  
+ Max.   :1537.66   Max.   :4951.000   Max.   :154.0000   Max.   :370937   Max.   :119425   Max.   :27876.0  
+ NA's   :256       NA's   :256        NA's   :256        NA's   :256      NA's   :256      NA's   :256      
+   nas_delay        security_delay     late_aircraft_delay
+ Min.   :     0.0   Min.   :   0.000   Min.   :     0     
+ 1st Qu.:    21.0   1st Qu.:   0.000   1st Qu.:    38     
+ Median :   107.0   Median :   0.000   Median :   239     
+ Mean   :   708.5   Mean   :   6.483   Mean   :  1301     
+ 3rd Qu.:   340.0   3rd Qu.:   0.000   3rd Qu.:   828     
+ Max.   :112018.0   Max.   :3760.000   Max.   :158653     
+ NA's   :256        NA's   :256        NA's   :256        
+> head(Delays)
+  year month carrier      carrier_name airport                                          airport_name
+1 2023     2      9E Endeavor Air Inc.     ABY                Albany, GA: Southwest Georgia Regional
+2 2023     2      9E Endeavor Air Inc.     AEX              Alexandria, LA: Alexandria International
+3 2023     2      9E Endeavor Air Inc.     AGS           Augusta, GA: Augusta Regional at Bush Field
+4 2023     2      9E Endeavor Air Inc.     ALB                      Albany, NY: Albany International
+5 2023     2      9E Endeavor Air Inc.     ATL Atlanta, GA: Hartsfield-Jackson Atlanta International
+6 2023     2      9E Endeavor Air Inc.     AUS          Austin, TX: Austin - Bergstrom International
+  arr_flights arr_del15 carrier_ct weather_ct nas_ct security_ct late_aircraft_ct arr_cancelled arr_diverted
+1          68         4       1.00       0.00   3.00           0             0.00             0            0
+2          56         3       2.00       0.00   1.00           0             0.00             0            2
+3          17         2       2.00       0.00   0.00           0             0.00             0            0
+4          96        14       3.07       0.00   2.10           0             8.83             4            0
+5        1574       135      59.79       4.76  18.44           0            52.01             2            0
+6          44         4       1.00       1.00   2.00           0             0.00             0            1
+  arr_delay carrier_delay weather_delay nas_delay security_delay late_aircraft_delay
+1        89            26             0        63              0                   0
+2       140           124             0        16              0                   0
+3        52            52             0         0              0                   0
+4       683            97             0        80              0                 506
+5     16180          8647           445       517              0                6571
+6       112            28            42        42              0                   0
+> summary(Delays)
+      year          month          carrier          carrier_name         airport          airport_name      
+ Min.   :2018   Min.   : 1.000   Length:120188      Length:120188      Length:120188      Length:120188     
+ 1st Qu.:2019   1st Qu.: 3.000   Class :character   Class :character   Class :character   Class :character  
+ Median :2020   Median : 6.000   Mode  :character   Mode  :character   Mode  :character   Mode  :character  
+ Mean   :2020   Mean   : 6.422                                                                              
+ 3rd Qu.:2021   3rd Qu.: 9.000                                                                              
+ Max.   :2023   Max.   :12.000                                                                              
+                                                                                                            
+  arr_flights      arr_del15         carrier_ct        weather_ct          nas_ct         security_ct     
+ Min.   :    1   Min.   :   0.00   Min.   :   0.00   Min.   :  0.000   Min.   :   0.00   Min.   : 0.0000  
+ 1st Qu.:   34   1st Qu.:   5.00   1st Qu.:   1.60   1st Qu.:  0.000   1st Qu.:   0.73   1st Qu.: 0.0000  
+ Median :   81   Median :  13.00   Median :   4.71   Median :  0.140   Median :   2.93   Median : 0.0000  
+ Mean   :  290   Mean   :  50.87   Mean   :  16.55   Mean   :  1.877   Mean   :  14.69   Mean   : 0.1358  
+ 3rd Qu.:  188   3rd Qu.:  34.00   3rd Qu.:  12.55   3rd Qu.:  1.480   3rd Qu.:   8.40   3rd Qu.: 0.0000  
+ Max.   :21931   Max.   :4176.00   Max.   :1147.00   Max.   :226.000   Max.   :1884.42   Max.   :58.6900  
+ NA's   :256     NA's   :491       NA's   :256       NA's   :256       NA's   :256       NA's   :256      
+ late_aircraft_ct  arr_cancelled       arr_diverted        arr_delay      carrier_delay    weather_delay    
+ Min.   :   0.00   Min.   :   0.000   Min.   :  0.0000   Min.   :     0   Min.   :     0   Min.   :    0.0  
+ 1st Qu.:   0.96   1st Qu.:   0.000   1st Qu.:  0.0000   1st Qu.:   244   1st Qu.:    74   1st Qu.:    0.0  
+ Median :   3.65   Median :   1.000   Median :  0.0000   Median :   789   Median :   273   Median :    8.0  
+ Mean   :  17.51   Mean   :   7.437   Mean   :  0.6796   Mean   :  3412   Mean   :  1196   Mean   :  199.5  
+ 3rd Qu.:  10.96   3rd Qu.:   4.000   3rd Qu.:  0.0000   3rd Qu.:  2207   3rd Qu.:   856   3rd Qu.:  122.0  
+ Max.   :1537.66   Max.   :4951.000   Max.   :154.0000   Max.   :370937   Max.   :119425   Max.   :27876.0  
+ NA's   :256       NA's   :256        NA's   :256        NA's   :256      NA's   :256      NA's   :256      
+   nas_delay        security_delay     late_aircraft_delay
+ Min.   :     0.0   Min.   :   0.000   Min.   :     0     
+ 1st Qu.:    21.0   1st Qu.:   0.000   1st Qu.:    38     
+ Median :   107.0   Median :   0.000   Median :   239     
+ Mean   :   708.5   Mean   :   6.483   Mean   :  1301     
+ 3rd Qu.:   340.0   3rd Qu.:   0.000   3rd Qu.:   828     
+ Max.   :112018.0   Max.   :3760.000   Max.   :158653     
+ NA's   :256        NA's   :256        NA's   :256        
+> 
+> #Null Hypothesis (H₀): Airport congestion, weather, and operational issues have no significant effect on flight delays.
+> #Alternative Hypothesis (H₁): Airport congestion, weather, and operational issues significantly affect flight delays.
+> 
+> 
+> #Clean the data
+> # Creating a new variable, `total_delay`, to work with the delays from all sources for each flight.
+> # Calculating `delay_ratio` to normalize delays based on the number of arriving flights.
+> # Dropping rows with missing values to ensure the dataset is clean and ready for analysis.
+> Delays <- Delays %>%
++   mutate(
++     total_delay = carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay,
++     delay_ratio = total_delay / arr_flights
++   ) %>%
++   drop_na(total_delay, arr_flights)
+> 
+> #Creation of Subsets
+> # Focusing on Atlanta (ATL), one of the busiest hubs, to analyze specific patterns and identify localized causes of delays.
+> Delays_subset <- Delays %>% filter(airport == "ATL")
+> 
+> #Summarize the Data in to Average delay by airport
+> # Grouping data by airport to calculate average delays and flights for each location.
+> # Sorting airports by their average delay to identify which ones experience the most significant issues.
+> delay_summary <- Delays %>%
++   group_by(airport_name) %>%
++   summarize(
++     avg_delay = mean(total_delay, na.rm = TRUE),
++     avg_flights = mean(arr_flights, na.rm = TRUE)
++   ) %>%
++   arrange(desc(avg_delay))
+> 
+> print(delay_summary)
+# A tibble: 409 × 3
+   airport_name                                           avg_delay avg_flights
+   <chr>                                                      <dbl>       <dbl>
+ 1 Chicago, IL: Chicago O'Hare International                 25162.       1692.
+ 2 Dallas/Fort Worth, TX: Dallas/Fort Worth International    25021.       1730.
+ 3 Denver, CO: Denver International                          20570.       1702.
+ 4 Atlanta, GA: Hartsfield-Jackson Atlanta International     17187.       1865.
+ 5 Sanford, FL: Orlando Sanford International                16471.        802.
+ 6 New York, NY: John F. Kennedy International               16359.       1047.
+ 7 Newark, NJ: Newark Liberty International                  16046.        796.
+ 8 Orlando, FL: Orlando International                        15781.       1153.
+ 9 San Francisco, CA: San Francisco International            15160.       1073.
+10 Los Angeles, CA: Los Angeles International                14635.       1360.
+# ℹ 399 more rows
+# ℹ Use `print(n = ...)` to see more rows
+> 
+> # Visualization 1: Average Total Delay by Carrier
+> # Plotting average delays by carrier to determine which airlines have the highest average delays.
+> # This visualization helps identify carriers with operational inefficiencies that contribute to delays.
+> p_carrier_delay <- ggplot(
++   data = Delays,
++   mapping = aes(
++     x = reorder(carrier_name, total_delay, FUN = mean),  # Order by mean total_delay
++     y = total_delay,
++     fill = carrier_name
++   )
++ ) +
++   geom_bar(stat = "summary", fun = "mean") +
++   labs(
++     x = "Carrier",
++     y = "Average Total Delay",
++     fill = "Carrier",
++     title = "Average Total Delay by Carrier",
++     subtitle = "Carriers ordered by increasing average total delay"
++   ) +
++   theme(
++     axis.text.x = element_text(angle = 45, hjust = 1),  # Tilt x-axis labels
++     panel.background = element_blank(),  # Clean background
++     panel.grid.major = element_line(color = "grey90")
++   ) +
++   scale_fill_manual(
++     values = scales::hue_pal()(length(unique(Delays$carrier_name)))  # Automatically generate colors
++   )
+> 
+> print(p_carrier_delay)
+> 
+> #The dataset is filtered to the top 6 carriers by average delay
+> Delays_top_6 <- Delays %>%
++   group_by(carrier_name) %>%
++   summarise(avg_delay = mean(total_delay, na.rm = TRUE)) %>%
++   top_n(6, avg_delay) %>%
++   arrange(desc(avg_delay))
+> 
+> # Visualization for Top 6 Carriers with Largest Average Delays
+> top6_carrier_delay <- ggplot(
++   data = Delays_top_6,
++   mapping = aes(
++     x = reorder(carrier_name, avg_delay),  
++     y = avg_delay,
++     fill = carrier_name
++   )
++ ) +
++   geom_bar(stat = "identity") + 
++   geom_text(
++     aes(label = round(avg_delay, 1)),  
++     vjust = -0.5
++   ) +
++   labs(
++     x = "Carrier",
++     y = "Average Total Delay",
++     fill = "Carrier",
++     title = "Top 6 Carriers by Average Total Delay",
++     subtitle = "Focusing on carriers with the largest average delays"
++   ) +
++   theme(
++     axis.text.x = element_text(angle = 45, hjust = 1),  
++     panel.background = element_blank(), 
++     panel.grid.major = element_line(color = "grey90")
++   ) +
++   scale_fill_manual(
++     values = scales::hue_pal()(6)  
++   )
+> 
+> print(top6_carrier_delay)
+> 
+> #visulization 2
+> 
+> # Step 1: Summarize total delays by airport and select the top 10
+> top_airports <- Delays %>%
++   group_by(airport) %>%  # Use airport codes instead of names
++   summarize(total_flight_delays = sum(total_delay, na.rm = TRUE)) %>%
++   arrange(desc(total_flight_delays)) %>%
++   slice_head(n = 10)  # Select top 10 airports
+> 
+> # Step 2: Filter the main dataset for the top 10 airports
+> Delays_top_10 <- Delays %>%
++   filter(airport %in% top_airports$airport)
+> 
+> # Step 3: Create a bar plot for the top 10 airports using airport codes
+> p_top_airports <- ggplot(Delays_top_10, aes(
++   x = reorder(airport, -total_delay, FUN = sum),
++   y = total_delay,
++   fill = airport
++ )) +
++   geom_bar(stat = "summary", fun = "sum") +
++   geom_text(
++     stat = "summary",
++     fun = "sum",
++     aes(label = round(..y.., 0)), 
++     vjust = -0.5
++   ) +
++   labs(
++     title = "Top 10 Airports by Total Flight Delays (Using Codes)",
++     x = "Airport Code",
++     y = "Total Delays (minutes)",
++     fill = "Airport Code"
++   ) +
++   theme_minimal() +
++   theme(
++     axis.text.x = element_text(angle = 75, hjust = 1),  
++     panel.grid.major = element_line(color = "grey90")   
++   ) +
++   scale_fill_viridis_d(option = "plasma", end = 0.85)  
+> 
+> print(p_top_airports)
+> 
+> # Proportion of Different Delay Types
+> delay_proportion <- Delays %>%
++   pivot_longer(cols = c(carrier_delay, weather_delay, nas_delay, security_delay, late_aircraft_delay),
++                names_to = "delay_type", values_to = "delay_value") %>%
++   group_by(delay_type) %>%
++   summarize(total_delay = sum(delay_value, na.rm = TRUE))
+> 
+> # Visualization 3: Bar Plot of Delay Types
+> p_delay_type <- ggplot(delay_proportion, aes(x = delay_type, y = total_delay, fill = delay_type)) +
++   geom_bar(stat = "identity") +
++   labs(x = "Delay Type", y = "Total Delay (Minutes)", fill = "Delay Type", title = "Delay Types by the Minutes" , subtitle = "Feb. 2018 - Feb.2023") +
++   scale_fill_viridis_d(option = "plasma", end = 0.75)
+> 
+> print(p_delay_type)
+> 
+> # Regression Analysis: Predicting Total Delays
+> # Fitting a linear regression model to examine how arrivals, weather, and airspace issues predict total delays.
+> # This analysis quantifies the impact of each factor and tests hypotheses about their significance.
+> model_delay <- lm(total_delay ~ arr_flights + weather_ct + nas_ct, data = Delays)
+> print(summary(model_delay))
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct, 
+    data = Delays)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-103586    -445     -61     254  129410 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  -2.25259   10.71280   -0.21    0.833    
+arr_flights   3.88181    0.02289  169.57   <2e-16 ***
+weather_ct  450.27940    2.20485  204.22   <2e-16 ***
+nas_ct       98.22450    0.34378  285.72   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 3504 on 119928 degrees of freedom
+Multiple R-squared:  0.8959,	Adjusted R-squared:  0.8959 
+F-statistic: 3.441e+05 on 3 and 119928 DF,  p-value: < 2.2e-16
+
+> 
+> # GAM Analysis: Smooth Relationships
+> # Using GAM to model potential non-linear relationships between predictors and total delays.
+> # GAM captures more complex patterns that may not be evident in a standard linear regression model.
+> model_gam <- gam(total_delay ~ s(arr_flights) + s(weather_ct) + s(nas_ct), data = Delays)
+> print(summary(model_gam))
+
+Family: gaussian 
+Link function: identity 
+
+Formula:
+total_delay ~ s(arr_flights) + s(weather_ct) + s(nas_ct)
+
+Parametric coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 3411.756      9.744   350.2   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Approximate significance of smooth terms:
+                 edf Ref.df    F p-value    
+s(arr_flights) 8.975  9.000 3616  <2e-16 ***
+s(weather_ct)  8.907  8.997 4790  <2e-16 ***
+s(nas_ct)      8.985  9.000 9269  <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+R-sq.(adj) =  0.903   Deviance explained = 90.3%
+GCV = 1.1389e+07  Scale est. = 1.1386e+07  n = 119932
+> 
+> # Plot Smooth Relationships from GAM
+> plot(model_gam, pages = 1, all.terms = TRUE)
+> 
+> # Data Cleaning and Transformation
+> Delays <- Delays %>%
++   mutate(
++     total_delay = carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay,
++     delay_ratio = total_delay / arr_flights
++   ) %>%
++   drop_na(total_delay, arr_flights)
+> 
+> #Analyze the relationship between these factors and total delays.
+> 
+> # Subset Data for Relevant Variables
+> Delays_subset <- Delays %>%
++   select(airport_name, arr_flights, total_delay, weather_ct, nas_ct, late_aircraft_ct)
+> 
+> # Descriptive Statistics
+> summary_stats <- Delays_subset %>%
++   summarize(
++     avg_flights = mean(arr_flights, na.rm = TRUE),
++     avg_total_delay = mean(total_delay, na.rm = TRUE),
++     avg_weather_ct = mean(weather_ct, na.rm = TRUE),
++     avg_nas_ct = mean(nas_ct, na.rm = TRUE),
++     avg_late_aircraft_ct = mean(late_aircraft_ct, na.rm = TRUE)
++   )
+> 
+> print(summary_stats)
+  avg_flights avg_total_delay avg_weather_ct avg_nas_ct avg_late_aircraft_ct
+1    289.9715        3411.756       1.876979   14.69316             17.51116
+> 
+> # Density Plot: Highlight regions of higher density
+> p_delay_density <- ggplot(data = Delays_subset,
++                           mapping = aes(x = arr_flights, y = total_delay)) +
++   geom_density_2d(color = "darkgreen") + 
++   geom_point(size = 1.5, alpha = 0.5, color = "blue") +  
++   labs(
++     title = "Delays vs. Arrivals (Density Plot)",
++     x = "Number of Arrivals",
++     y = "Total Delays (Minutes)"
++   ) +
++   theme_minimal() +
++   theme(
++     panel.grid.major = element_line(color = "grey90")  
++   )
+> 
+> # Print the density plot
+> print(p_delay_density)
+> # Statistical Analysis
+> 
+> # Data Cleaning and Transformation
+> Delays <- Delays %>%
++   mutate(
++     total_delay = carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay,
++     delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay")
++   ) %>%
++   drop_na(total_delay, arr_flights, weather_ct, nas_ct, late_aircraft_ct)
+> 
+> # Normalize Numeric Variables
+> norm_varb <- function(X_in) {
++   (X_in - min(X_in, na.rm = TRUE)) / (max(X_in, na.rm = TRUE) - min(X_in, na.rm = TRUE))
++ }
+> 
+> data_normalized <- data.frame(
++   norm_varb(Delays$arr_flights),
++   norm_varb(Delays$weather_ct),
++   norm_varb(Delays$nas_ct),
++   norm_varb(Delays$late_aircraft_ct)
++ )
+> colnames(data_normalized) <- c("arr_flights", "weather_ct", "nas_ct", "late_aircraft_ct")
+> 
+> # Filter for Complete Cases
+> good_obs <- complete.cases(data_normalized, Delays$delay_category)
+> dat_use <- subset(data_normalized, good_obs)
+> y_use <- subset(Delays$delay_category, good_obs)
+> 
+> # Split into Training and Testing Data
+> set.seed(12345)
+> NN_obs <- sum(good_obs)
+> select1 <- (runif(NN_obs) < 0.8)
+> train_data <- subset(dat_use, select1)
+> test_data <- subset(dat_use, !select1)
+> cl_data <- y_use[select1]
+> true_data <- y_use[!select1]
+> 
+> # Add Small Noise to Break Ties
+> train_data <- train_data + matrix(rnorm(n = nrow(train_data) * ncol(train_data), mean = 0, sd = 1e-6), 
++                                   nrow = nrow(train_data), ncol = ncol(train_data))
+> test_data <- test_data + matrix(rnorm(n = nrow(test_data) * ncol(test_data), mean = 0, sd = 1e-6), 
++                                 nrow = nrow(test_data), ncol = ncol(test_data))
+> 
+> # k-NN Classification
+> # Applying k-NN to classify flights into "High Delay" or "Low Delay" based on multiple predictors.
+> # Testing various `k` values to find the optimal classification accuracy.
+> for (k in seq(1, 9, by = 2)) {
++   pred_y <- knn(train = train_data, test = test_data, cl = cl_data, k = k)
++   num_correct_labels <- sum(pred_y == true_data)
++   correct_rate <- num_correct_labels / length(true_data)
++   print(c(k, correct_rate))
++ }
+[1] 1.0000000 0.8646412
+[1] 3.0000000 0.8819842
+[1] 5.0000000 0.8922228
+[1] 7.0000000 0.8959422
+[1] 9.0000000 0.8976556
+> 
+> # View the dataset
+> head(Delays)
+  year month carrier      carrier_name airport                                          airport_name
+1 2023     2      9E Endeavor Air Inc.     ABY                Albany, GA: Southwest Georgia Regional
+2 2023     2      9E Endeavor Air Inc.     AEX              Alexandria, LA: Alexandria International
+3 2023     2      9E Endeavor Air Inc.     AGS           Augusta, GA: Augusta Regional at Bush Field
+4 2023     2      9E Endeavor Air Inc.     ALB                      Albany, NY: Albany International
+5 2023     2      9E Endeavor Air Inc.     ATL Atlanta, GA: Hartsfield-Jackson Atlanta International
+6 2023     2      9E Endeavor Air Inc.     AUS          Austin, TX: Austin - Bergstrom International
+  arr_flights arr_del15 carrier_ct weather_ct nas_ct security_ct late_aircraft_ct arr_cancelled arr_diverted
+1          68         4       1.00       0.00   3.00           0             0.00             0            0
+2          56         3       2.00       0.00   1.00           0             0.00             0            2
+3          17         2       2.00       0.00   0.00           0             0.00             0            0
+4          96        14       3.07       0.00   2.10           0             8.83             4            0
+5        1574       135      59.79       4.76  18.44           0            52.01             2            0
+6          44         4       1.00       1.00   2.00           0             0.00             0            1
+  arr_delay carrier_delay weather_delay nas_delay security_delay late_aircraft_delay total_delay delay_ratio
+1        89            26             0        63              0                   0          89    1.308824
+2       140           124             0        16              0                   0         140    2.500000
+3        52            52             0         0              0                   0          52    3.058824
+4       683            97             0        80              0                 506         683    7.114583
+5     16180          8647           445       517              0                6571       16180   10.279543
+6       112            28            42        42              0                   0         112    2.545455
+  delay_category
+1      Low Delay
+2      Low Delay
+3      Low Delay
+4      Low Delay
+5     High Delay
+6      Low Delay
+> summary(Delays)
+      year          month          carrier          carrier_name         airport          airport_name      
+ Min.   :2018   Min.   : 1.000   Length:119932      Length:119932      Length:119932      Length:119932     
+ 1st Qu.:2019   1st Qu.: 3.000   Class :character   Class :character   Class :character   Class :character  
+ Median :2020   Median : 6.000   Mode  :character   Mode  :character   Mode  :character   Mode  :character  
+ Mean   :2020   Mean   : 6.422                                                                              
+ 3rd Qu.:2021   3rd Qu.: 9.000                                                                              
+ Max.   :2023   Max.   :12.000                                                                              
+                                                                                                            
+  arr_flights      arr_del15         carrier_ct        weather_ct          nas_ct         security_ct     
+ Min.   :    1   Min.   :   0.00   Min.   :   0.00   Min.   :  0.000   Min.   :   0.00   Min.   : 0.0000  
+ 1st Qu.:   34   1st Qu.:   5.00   1st Qu.:   1.60   1st Qu.:  0.000   1st Qu.:   0.73   1st Qu.: 0.0000  
+ Median :   81   Median :  13.00   Median :   4.71   Median :  0.140   Median :   2.93   Median : 0.0000  
+ Mean   :  290   Mean   :  50.87   Mean   :  16.55   Mean   :  1.877   Mean   :  14.69   Mean   : 0.1358  
+ 3rd Qu.:  188   3rd Qu.:  34.00   3rd Qu.:  12.55   3rd Qu.:  1.480   3rd Qu.:   8.40   3rd Qu.: 0.0000  
+ Max.   :21931   Max.   :4176.00   Max.   :1147.00   Max.   :226.000   Max.   :1884.42   Max.   :58.6900  
+                 NA's   :235                                                                              
+ late_aircraft_ct  arr_cancelled       arr_diverted        arr_delay      carrier_delay    weather_delay    
+ Min.   :   0.00   Min.   :   0.000   Min.   :  0.0000   Min.   :     0   Min.   :     0   Min.   :    0.0  
+ 1st Qu.:   0.96   1st Qu.:   0.000   1st Qu.:  0.0000   1st Qu.:   244   1st Qu.:    74   1st Qu.:    0.0  
+ Median :   3.65   Median :   1.000   Median :  0.0000   Median :   789   Median :   273   Median :    8.0  
+ Mean   :  17.51   Mean   :   7.437   Mean   :  0.6796   Mean   :  3412   Mean   :  1196   Mean   :  199.5  
+ 3rd Qu.:  10.96   3rd Qu.:   4.000   3rd Qu.:  0.0000   3rd Qu.:  2207   3rd Qu.:   856   3rd Qu.:  122.0  
+ Max.   :1537.66   Max.   :4951.000   Max.   :154.0000   Max.   :370937   Max.   :119425   Max.   :27876.0  
+                                                                                                            
+   nas_delay        security_delay     late_aircraft_delay  total_delay      delay_ratio      
+ Min.   :     0.0   Min.   :   0.000   Min.   :     0      Min.   :     0   Min.   :   0.000  
+ 1st Qu.:    21.0   1st Qu.:   0.000   1st Qu.:    38      1st Qu.:   244   1st Qu.:   4.726  
+ Median :   107.0   Median :   0.000   Median :   239      Median :   789   Median :   9.333  
+ Mean   :   708.5   Mean   :   6.483   Mean   :  1301      Mean   :  3412   Mean   :  11.778  
+ 3rd Qu.:   340.0   3rd Qu.:   0.000   3rd Qu.:   828      3rd Qu.:  2207   3rd Qu.:  15.672  
+ Max.   :112018.0   Max.   :3760.000   Max.   :158653      Max.   :370937   Max.   :3174.000  
+                                                                                              
+ delay_category    
+ Length:119932     
+ Class :character  
+ Mode  :character  
+                   
+                   
+                   
+                   
+> 
+> # Data Cleaning and Transformation
+> Delays <- Delays %>%
++   mutate(
++     total_delay = carrier_delay + weather_delay + nas_delay + security_delay + late_aircraft_delay,
++     log_total_delay = log1p(total_delay), 
++     delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay"),
++     month = factor(month),  
++     day_category = ifelse(month %in% c(6, 7, 8), "Summer", "Non-Summer")  
++   ) %>%
++   drop_na(total_delay, arr_flights, weather_ct, nas_ct, late_aircraft_ct)
+> 
+> # Subset: Analyze only prime operational hours
+> prime_flight_data <- Delays %>%
++   filter(arr_flights > 50 & total_delay > 0)
+> 
+> # Define 'graph_obs' as a logical condition for filtering
+> prime_flight_data$graph_obs <- prime_flight_data$total_delay > 1000 & prime_flight_data$arr_flights > 50
+> 
+> # Summary of the dataset
+> summary(prime_flight_data)
+      year          month         carrier          carrier_name         airport          airport_name      
+ Min.   :2018   2      : 7811   Length:81975       Length:81975       Length:81975       Length:81975      
+ 1st Qu.:2019   3      : 7146   Class :character   Class :character   Class :character   Class :character  
+ Median :2020   7      : 7024   Mode  :character   Mode  :character   Mode  :character   Mode  :character  
+ Mean   :2020   8      : 6965                                                                              
+ 3rd Qu.:2021   10     : 6809                                                                              
+ Max.   :2023   9      : 6758                                                                              
+                (Other):39462                                                                              
+  arr_flights        arr_del15         carrier_ct        weather_ct          nas_ct         security_ct     
+ Min.   :   51.0   Min.   :   1.00   Min.   :   0.00   Min.   :  0.000   Min.   :   0.00   Min.   : 0.0000  
+ 1st Qu.:   78.0   1st Qu.:  12.00   1st Qu.:   4.00   1st Qu.:  0.000   1st Qu.:   2.07   1st Qu.: 0.0000  
+ Median :  129.0   Median :  23.00   Median :   8.35   Median :  0.910   Median :   5.32   Median : 0.0000  
+ Mean   :  413.2   Mean   :  72.41   Mean   :  23.52   Mean   :  2.654   Mean   :  20.99   Mean   : 0.1941  
+ 3rd Qu.:  293.0   3rd Qu.:  53.00   3rd Qu.:  19.72   3rd Qu.:  2.250   3rd Qu.:  13.42   3rd Qu.: 0.0000  
+ Max.   :21931.0   Max.   :4176.00   Max.   :1147.00   Max.   :226.000   Max.   :1884.42   Max.   :58.6900  
+                                                                                                            
+ late_aircraft_ct  arr_cancelled      arr_diverted      arr_delay      carrier_delay    weather_delay    
+ Min.   :   0.00   Min.   :   0.00   Min.   :  0.00   Min.   :    15   Min.   :     0   Min.   :    0.0  
+ 1st Qu.:   2.81   1st Qu.:   0.00   1st Qu.:  0.00   1st Qu.:   654   1st Qu.:   212   1st Qu.:    0.0  
+ Median :   6.97   Median :   2.00   Median :  0.00   Median :  1444   Median :   523   Median :   45.0  
+ Mean   :  25.06   Mean   :  10.43   Mean   :  0.96   Mean   :  4868   Mean   :  1701   Mean   :  281.4  
+ 3rd Qu.:  17.57   3rd Qu.:   6.00   3rd Qu.:  1.00   3rd Qu.:  3461   3rd Qu.:  1346   3rd Qu.:  208.0  
+ Max.   :1537.66   Max.   :4951.00   Max.   :154.00   Max.   :370937   Max.   :119425   Max.   :27876.0  
+                                                                                                         
+   nas_delay      security_delay     late_aircraft_delay  total_delay      delay_ratio       
+ Min.   :     0   Min.   :   0.000   Min.   :     0      Min.   :    15   Min.   :  0.04601  
+ 1st Qu.:    74   1st Qu.:   0.000   1st Qu.:   162      1st Qu.:   654   1st Qu.:  5.87039  
+ Median :   206   Median :   0.000   Median :   487      Median :  1444   Median : 10.08247  
+ Mean   :  1015   Mean   :   9.257   Mean   :  1861      Mean   :  4868   Mean   : 11.82021  
+ 3rd Qu.:   565   3rd Qu.:   0.000   3rd Qu.:  1343      3rd Qu.:  3461   3rd Qu.: 15.83916  
+ Max.   :112018   Max.   :3760.000   Max.   :158653      Max.   :370937   Max.   :153.72727  
+                                                                                             
+ delay_category     log_total_delay  day_category       graph_obs      
+ Length:81975       Min.   : 2.773   Length:81975       Mode :logical  
+ Class :character   1st Qu.: 6.485   Class :character   FALSE:30994    
+ Mode  :character   Median : 7.276   Mode  :character   TRUE :50981    
+                    Mean   : 7.371                                     
+                    3rd Qu.: 8.150                                     
+                    Max.   :12.824                                     
+                                                                       
+> 
+> # Linear Regression Model (Base Model)
+> model_1 <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = prime_flight_data)
+> summary(model_1)
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct + 
+    late_aircraft_ct, data = prime_flight_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-88401   -460    -39    354  93927 
+
+Coefficients:
+                  Estimate Std. Error t value Pr(>|t|)    
+(Intercept)      -31.15622   11.37547  -2.739  0.00617 ** 
+arr_flights        0.12125    0.02373   5.109 3.25e-07 ***
+weather_ct       392.85471    1.90520 206.202  < 2e-16 ***
+nas_ct            70.64167    0.31034 227.625  < 2e-16 ***
+late_aircraft_ct  92.73892    0.32622 284.287  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 3003 on 81970 degrees of freedom
+Multiple R-squared:  0.9456,	Adjusted R-squared:  0.9456 
+F-statistic: 3.563e+05 on 4 and 81970 DF,  p-value: < 2.2e-16
+
+> 
+> # Extended Model: Adding Month and Day Category (Seasonal Analysis)
+> model_2 <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + month + day_category, 
++               data = prime_flight_data)
+> summary(model_2)
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct + 
+    late_aircraft_ct + month + day_category, data = prime_flight_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-88370   -463    -41    358  93919 
+
+Coefficients: (1 not defined because of singularities)
+                     Estimate Std. Error t value Pr(>|t|)    
+(Intercept)          74.62054   37.13105   2.010 0.044471 *  
+arr_flights           0.12441    0.02396   5.193 2.08e-07 ***
+weather_ct          392.81104    1.92543 204.012  < 2e-16 ***
+nas_ct               70.64555    0.31042 227.578  < 2e-16 ***
+late_aircraft_ct     92.68406    0.32788 282.680  < 2e-16 ***
+month2             -199.96945   50.13358  -3.989 6.65e-05 ***
+month3             -119.38901   51.23906  -2.330 0.019807 *  
+month4                9.29530   52.52381   0.177 0.859530    
+month5             -158.66333   52.68807  -3.011 0.002601 ** 
+month6              -38.83452   52.42879  -0.741 0.458872    
+month7              -91.82039   51.54080  -1.782 0.074833 .  
+month8             -190.94303   51.59328  -3.701 0.000215 ***
+month9             -174.65379   51.91055  -3.365 0.000767 ***
+month10            -164.17182   51.83096  -3.167 0.001538 ** 
+month11            -132.84298   51.97468  -2.556 0.010593 *  
+month12              18.50049   51.99594   0.356 0.721986    
+day_categorySummer         NA         NA      NA       NA    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 3002 on 81959 degrees of freedom
+Multiple R-squared:  0.9456,	Adjusted R-squared:  0.9456 
+F-statistic: 9.506e+04 on 15 and 81959 DF,  p-value: < 2.2e-16
+
+> 
+> # Interaction Effects: Congestion and Weather
+> model_3 <- lm(total_delay ~ arr_flights * weather_ct + nas_ct + late_aircraft_ct + month + day_category, 
++               data = prime_flight_data)
+> summary(model_3)
+
+Call:
+lm(formula = total_delay ~ arr_flights * weather_ct + nas_ct + 
+    late_aircraft_ct + month + day_category, data = prime_flight_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-95329   -487    -91    320  92914 
+
+Coefficients: (1 not defined because of singularities)
+                         Estimate Std. Error t value Pr(>|t|)    
+(Intercept)             1.626e+02  3.721e+01   4.369 1.25e-05 ***
+arr_flights            -1.792e-02  2.468e-02  -0.726 0.467813    
+weather_ct              3.665e+02  2.239e+00 163.723  < 2e-16 ***
+nas_ct                  7.084e+01  3.096e-01 228.841  < 2e-16 ***
+late_aircraft_ct        9.272e+01  3.268e-01 283.668  < 2e-16 ***
+month2                 -1.981e+02  4.998e+01  -3.963 7.40e-05 ***
+month3                 -1.329e+02  5.108e+01  -2.602 0.009262 ** 
+month4                 -3.431e+00  5.236e+01  -0.066 0.947755    
+month5                 -1.642e+02  5.252e+01  -3.125 0.001776 ** 
+month6                 -3.003e+01  5.226e+01  -0.575 0.565597    
+month7                 -8.048e+01  5.138e+01  -1.566 0.117289    
+month8                 -1.831e+02  5.143e+01  -3.560 0.000371 ***
+month9                 -1.865e+02  5.175e+01  -3.604 0.000314 ***
+month10                -1.782e+02  5.167e+01  -3.448 0.000564 ***
+month11                -1.473e+02  5.181e+01  -2.843 0.004470 ** 
+month12                 2.038e+01  5.183e+01   0.393 0.694113    
+day_categorySummer             NA         NA      NA       NA    
+arr_flights:weather_ct  5.919e-03  2.595e-04  22.813  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 2993 on 81958 degrees of freedom
+Multiple R-squared:  0.946,	Adjusted R-squared:  0.946 
+F-statistic: 8.971e+04 on 16 and 81958 DF,  p-value: < 2.2e-16
+
+> 
+> # Log-Transformed Model for Skewed Data
+> model_4 <- lm(log_total_delay ~ arr_flights * weather_ct + nas_ct + late_aircraft_ct + month + day_category, 
++               data = prime_flight_data)
+> summary(model_4)
+
+Call:
+lm(formula = log_total_delay ~ arr_flights * weather_ct + nas_ct + 
+    late_aircraft_ct + month + day_category, data = prime_flight_data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-6.5125 -0.5619  0.1191  0.7079 16.1192 
+
+Coefficients: (1 not defined because of singularities)
+                         Estimate Std. Error  t value Pr(>|t|)    
+(Intercept)             6.917e+00  1.204e-02  574.340  < 2e-16 ***
+arr_flights             4.959e-04  7.989e-06   62.075  < 2e-16 ***
+weather_ct              6.395e-02  7.245e-04   88.268  < 2e-16 ***
+nas_ct                  3.052e-03  1.002e-04   30.468  < 2e-16 ***
+late_aircraft_ct        5.514e-03  1.058e-04   52.130  < 2e-16 ***
+month2                  6.436e-02  1.617e-02    3.979 6.92e-05 ***
+month3                 -1.975e-01  1.653e-02  -11.950  < 2e-16 ***
+month4                 -2.815e-01  1.695e-02  -16.611  < 2e-16 ***
+month5                 -1.142e-01  1.700e-02   -6.717 1.87e-11 ***
+month6                  1.484e-01  1.691e-02    8.774  < 2e-16 ***
+month7                  1.391e-01  1.663e-02    8.364  < 2e-16 ***
+month8                  8.980e-02  1.665e-02    5.395 6.88e-08 ***
+month9                 -2.749e-01  1.675e-02  -16.413  < 2e-16 ***
+month10                -1.582e-01  1.672e-02   -9.459  < 2e-16 ***
+month11                -1.574e-01  1.677e-02   -9.386  < 2e-16 ***
+month12                 8.405e-02  1.677e-02    5.011 5.44e-07 ***
+day_categorySummer             NA         NA       NA       NA    
+arr_flights:weather_ct -1.073e-05  8.397e-08 -127.733  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.9686 on 81958 degrees of freedom
+Multiple R-squared:  0.5139,	Adjusted R-squared:  0.5138 
+F-statistic:  5415 on 16 and 81958 DF,  p-value: < 2.2e-16
+
+> 
+> # Hypothesis Testing for Model Coefficients
+> cat("\nHypothesis Testing for Model 3 (Interaction Effects):\n")
+
+Hypothesis Testing for Model 3 (Interaction Effects):
+> print(coeftest(model_3, vcov = vcovHC))
+
+t test of coefficients:
+
+                          Estimate  Std. Error t value  Pr(>|t|)    
+(Intercept)             1.6260e+02  4.2495e+01  3.8264 0.0001301 ***
+arr_flights            -1.7922e-02  1.3492e-01 -0.1328 0.8943272    
+weather_ct              3.6652e+02  1.3927e+01 26.3176 < 2.2e-16 ***
+nas_ct                  7.0840e+01  1.9706e+00 35.9488 < 2.2e-16 ***
+late_aircraft_ct        9.2715e+01  1.9054e+00 48.6595 < 2.2e-16 ***
+month2                 -1.9807e+02  5.1524e+01 -3.8441 0.0001211 ***
+month3                 -1.3293e+02  4.7569e+01 -2.7944 0.0052010 ** 
+month4                 -3.4310e+00  5.0287e+01 -0.0682 0.9456030    
+month5                 -1.6415e+02  5.1980e+01 -3.1580 0.0015891 ** 
+month6                 -3.0029e+01  5.9201e+01 -0.5072 0.6119914    
+month7                 -8.0476e+01  5.8094e+01 -1.3853 0.1659736    
+month8                 -1.8311e+02  5.7722e+01 -3.1722 0.0015135 ** 
+month9                 -1.8650e+02  4.9005e+01 -3.8057 0.0001415 ***
+month10                -1.7818e+02  5.2229e+01 -3.4115 0.0006463 ***
+month11                -1.4731e+02  5.1808e+01 -2.8434 0.0044646 ** 
+month12                 2.0385e+01  5.7110e+01  0.3569 0.7211436    
+arr_flights:weather_ct  5.9191e-03  2.2495e-03  2.6314 0.0085062 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+> 
+> # Heteroskedasticity Test for Model 3
+> cat("\nBreusch-Pagan Test for Heteroskedasticity:\n")
+
+Breusch-Pagan Test for Heteroskedasticity:
+> print(bptest(model_3))
+
+	studentized Breusch-Pagan test
+
+data:  model_3
+BP = 20700, df = 16, p-value < 2.2e-16
+
+> 
+> # Compare Predicted Means (Original vs Log-Transformed)
+> predicted_mean_3 <- mean(predict(model_3))
+> predicted_mean_4 <- exp(mean(predict(model_4)))
+> print(c("Predicted Mean (Model 3):", predicted_mean_3))
+[1] "Predicted Mean (Model 3):" "4868.22355596227"         
+> print(c("Predicted Mean (Exp of Model 4):", predicted_mean_4))
+[1] "Predicted Mean (Exp of Model 4):" "1589.26370217994"                
+> 
+> # Visualization: Scatterplot with Regression Line (Base Model)
+> set.seed(12345)
+> dat_graph <- subset(prime_flight_data, graph_obs)
+> 
+> plot(total_delay ~ jitter(arr_flights, factor = 2), pch = 16, 
++      col = rgb(0.5, 0.5, 0.5, alpha = 0.2), ylim = c(0, 5000), data = dat_graph,
++      xlab = "Arrivals (Congestion Proxy)", ylab = "Total Delays (Minutes)")
+> 
+> # Add Predicted Line (Base Model)
+> to_be_predicted <- data.frame(
++   arr_flights = seq(min(prime_flight_data$arr_flights), max(prime_flight_data$arr_flights), length.out = 100),
++   weather_ct = mean(prime_flight_data$weather_ct),
++   nas_ct = mean(prime_flight_data$nas_ct),
++   late_aircraft_ct = mean(prime_flight_data$late_aircraft_ct),
++   month = "1",  
++   day_category = "Non-Summer"
++ )
+> to_be_predicted$yhat <- predict(model_3, newdata = to_be_predicted)
+> lines(yhat ~ arr_flights, data = to_be_predicted, col = "blue", lwd = 2)
+> 
+> # Seasonal Effects: Compare Predictions by Season
+> to_be_predicted_summer <- to_be_predicted
+> to_be_predicted_summer$day_category <- "Summer"
+> to_be_predicted_summer$yhat <- predict(model_3, newdata = to_be_predicted_summer)
+Warning message:
+In predict.lm(model_3, newdata = to_be_predicted_summer) :
+  prediction from rank-deficient fit; attr(*, "non-estim") has doubtful cases
+> 
+> lines(yhat ~ arr_flights, data = to_be_predicted_summer, col = "red", lwd = 2, lty = 2)
+> 
+> legend("topright", legend = c("Non-Summer", "Summer"), col = c("blue", "red"), lty = c(1, 2), lwd = 2)
+> 
+> # Visualize Residuals for Model 3
+> par(mfrow = c(1, 1))
+> plot(residuals(model_3) ~ fitted(model_3), 
++      main = "Residuals vs Fitted (Model 3)", 
++      xlab = "Fitted Values", ylab = "Residuals",
++      col = rgb(0.5, 0.5, 0.5, alpha = 0.5), pch = 16)
+> abline(h = 0, col = "red", lwd = 2)
+> #Data done in Covid-19
+> 
+> # Data preparation for COVID-19 analysis
+> # Step 1: Subset Data for 2020
+> covid_data <- Delays %>% filter(year == 2020)
+> 
+> # Summary of 2020 data
+> summary(covid_data)
+      year          month        carrier          carrier_name         airport          airport_name      
+ Min.   :2020   1      :2202   Length:21735       Length:21735       Length:21735       Length:21735      
+ 1st Qu.:2020   3      :2190   Class :character   Class :character   Class :character   Class :character  
+ Median :2020   2      :2151   Mode  :character   Mode  :character   Mode  :character   Mode  :character  
+ Mean   :2020   4      :1847                                                                              
+ 3rd Qu.:2020   12     :1787                                                                              
+ Max.   :2020   9      :1716                                                                              
+                (Other):9842                                                                              
+  arr_flights        arr_del15         carrier_ct        weather_ct          nas_ct          security_ct      
+ Min.   :    1.0   Min.   :   0.00   Min.   :  0.000   Min.   :  0.000   Min.   :   0.000   Min.   : 0.00000  
+ 1st Qu.:   30.0   1st Qu.:   2.00   1st Qu.:  0.670   1st Qu.:  0.000   1st Qu.:   0.000   1st Qu.: 0.00000  
+ Median :   62.0   Median :   6.00   Median :  2.100   Median :  0.000   Median :   1.150   Median : 0.00000  
+ Mean   :  231.1   Mean   :  21.77   Mean   :  7.696   Mean   :  0.968   Mean   :   7.234   Mean   : 0.07271  
+ 3rd Qu.:  148.0   3rd Qu.:  15.00   3rd Qu.:  6.150   3rd Qu.:  0.970   3rd Qu.:   4.360   3rd Qu.: 0.00000  
+ Max.   :20669.0   Max.   :2605.00   Max.   :697.000   Max.   :115.460   Max.   :1105.830   Max.   :26.07000  
+                   NA's   :197                                                                                
+ late_aircraft_ct   arr_cancelled      arr_diverted      arr_delay        carrier_delay     weather_delay     
+ Min.   :   0.000   Min.   :   0.00   Min.   : 0.000   Min.   :     0.0   Min.   :    0.0   Min.   :    0.00  
+ 1st Qu.:   0.000   1st Qu.:   0.00   1st Qu.: 0.000   1st Qu.:    71.0   1st Qu.:   17.0   1st Qu.:    0.00  
+ Median :   1.000   Median :   0.00   Median : 0.000   Median :   281.0   Median :  113.0   Median :    0.00  
+ Mean   :   5.606   Mean   :  13.85   Mean   : 0.387   Mean   :  1349.5   Mean   :  553.0   Mean   :   93.61  
+ 3rd Qu.:   3.490   3rd Qu.:   4.00   3rd Qu.: 0.000   3rd Qu.:   881.5   3rd Qu.:  366.5   3rd Qu.:   41.00  
+ Max.   :1018.840   Max.   :4951.00   Max.   :85.000   Max.   :203424.0   Max.   :57477.0   Max.   :15912.00  
+                                                                                                              
+   nas_delay       security_delay     late_aircraft_delay  total_delay        delay_ratio     
+ Min.   :    0.0   Min.   :   0.000   Min.   :    0.0     Min.   :     0.0   Min.   :  0.000  
+ 1st Qu.:    0.0   1st Qu.:   0.000   1st Qu.:    0.0     1st Qu.:    71.0   1st Qu.:  1.586  
+ Median :   40.0   Median :   0.000   Median :   41.0     Median :   281.0   Median :  3.969  
+ Mean   :  292.1   Mean   :   2.962   Mean   :  407.8     Mean   :  1349.5   Mean   :  5.880  
+ 3rd Qu.:  156.0   3rd Qu.:   0.000   3rd Qu.:  231.0     3rd Qu.:   881.5   3rd Qu.:  7.714  
+ Max.   :56818.0   Max.   :1185.000   Max.   :88977.0     Max.   :203424.0   Max.   :246.333  
+                                                                                              
+ delay_category     log_total_delay  day_category      
+ Length:21735       Min.   : 0.000   Length:21735      
+ Class :character   1st Qu.: 4.277   Class :character  
+ Mode  :character   Median : 5.642   Mode  :character  
+                    Mean   : 5.199                     
+                    3rd Qu.: 6.783                     
+                    Max.   :12.223                     
+                                                       
+> 
+> # Step 2: Compare Delays in 2020 to Other Years
+> pre_covid_data <- Delays %>% filter(year < 2020)  
+> post_covid_data <- Delays %>% filter(year > 2020)  
+> 
+> # Summary Statistics by Period
+> summary_stats <- Delays %>%
++   mutate(period = case_when(
++     year < 2020 ~ "Pre-COVID",
++     year == 2020 ~ "COVID-2020",
++     year > 2020 ~ "Post-COVID"
++   )) %>%
++   group_by(period) %>%
++   summarize(
++     avg_delay = mean(total_delay, na.rm = TRUE),
++     median_delay = median(total_delay, na.rm = TRUE),
++     avg_arr_flights = mean(arr_flights, na.rm = TRUE),
++     avg_weather_ct = mean(weather_ct, na.rm = TRUE),
++     avg_nas_ct = mean(nas_ct, na.rm = TRUE)
++   )
+> 
+> print(summary_stats)
+# A tibble: 3 × 6
+  period     avg_delay median_delay avg_arr_flights avg_weather_ct avg_nas_ct
+  <chr>          <dbl>        <dbl>           <dbl>          <dbl>      <dbl>
+1 COVID-2020     1349.          281            231.          0.968       7.23
+2 Post-COVID     3705.          860            291.          2.17       13.6 
+3 Pre-COVID      4034.         1047            315.          1.98       19.1 
+> 
+> # Step 3: Visualization of Delays in 2020
+> # Bar plot of average delays by year
+> ggplot(Delays, aes(x = factor(year), y = total_delay, fill = factor(year))) +
++   stat_summary(fun = "mean", geom = "bar") +
++   labs(title = "Average Total Delays by Year", x = "Year", y = "Average Total Delay (Minutes)") +
++   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+> 
+> # Scatterplot for delays in 2020
+> ggplot(covid_data, aes(x = arr_flights, y = total_delay)) +
++   geom_point(alpha = 0.5) +
++   geom_smooth(method = "lm", se = FALSE, color = "blue") +
++   labs(title = "Flight Delays During COVID-19 (2020)", x = "Arrivals (Congestion Proxy)", y = "Total Delay")
+`geom_smooth()` using formula = 'y ~ x'
+> 
+> # Step 4: Regression Analysis for COVID-19 (2020)
+> model_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = covid_data)
+> summary(model_covid)
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct + 
+    late_aircraft_ct, data = covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-33682   -141     45    123  45309 
+
+Coefficients:
+                  Estimate Std. Error t value Pr(>|t|)    
+(Intercept)      -61.84261    9.78853  -6.318  2.7e-10 ***
+arr_flights        0.55006    0.02428  22.652  < 2e-16 ***
+weather_ct       360.20644    3.10605 115.969  < 2e-16 ***
+nas_ct            55.66359    0.61678  90.249  < 2e-16 ***
+late_aircraft_ct  95.06149    0.75007 126.737  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1365 on 21730 degrees of freedom
+Multiple R-squared:  0.9295,	Adjusted R-squared:  0.9295 
+F-statistic: 7.16e+04 on 4 and 21730 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 5: Compare COVID-19 Model to Pre/Post-COVID Models
+> model_pre_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = pre_covid_data)
+> model_post_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = post_covid_data)
+> 
+> summary(model_pre_covid)
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct + 
+    late_aircraft_ct, data = pre_covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-87756   -319    -20    247  65827 
+
+Coefficients:
+                  Estimate Std. Error t value Pr(>|t|)    
+(Intercept)       22.11574   11.38270   1.943    0.052 .  
+arr_flights       -1.65358    0.03268 -50.601   <2e-16 ***
+weather_ct       340.19454    3.02337 112.522   <2e-16 ***
+nas_ct            87.40651    0.32784 266.613   <2e-16 ***
+late_aircraft_ct  99.27917    0.45918 216.212   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 2365 on 48670 degrees of freedom
+Multiple R-squared:  0.961,	Adjusted R-squared:  0.961 
+F-statistic: 3.001e+05 on 4 and 48670 DF,  p-value: < 2.2e-16
+
+> summary(model_post_covid)
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct + 
+    late_aircraft_ct, data = post_covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-58981   -312     11    234  89397 
+
+Coefficients:
+                  Estimate Std. Error t value Pr(>|t|)    
+(Intercept)      -66.30631   12.85508  -5.158 2.51e-07 ***
+arr_flights        1.68450    0.03416  49.308  < 2e-16 ***
+weather_ct       382.10093    2.13623 178.867  < 2e-16 ***
+nas_ct            58.52466    0.48731 120.097  < 2e-16 ***
+late_aircraft_ct  90.39105    0.41624 217.159  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 2696 on 49517 degrees of freedom
+Multiple R-squared:  0.9444,	Adjusted R-squared:  0.9443 
+F-statistic: 2.101e+05 on 4 and 49517 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 6: Visualization of Predicted Delays by Period
+> # Combine predictions
+> covid_data$predicted_delay <- predict(model_covid)
+> pre_covid_data$predicted_delay <- predict(model_pre_covid)
+> post_covid_data$predicted_delay <- predict(model_post_covid)
+> 
+> combined_data <- bind_rows(
++   covid_data %>% mutate(period = "COVID-2020"),
++   pre_covid_data %>% mutate(period = "Pre-COVID"),
++   post_covid_data %>% mutate(period = "Post-COVID")
++ )
+> 
+> ggplot(combined_data, aes(x = arr_flights, y = predicted_delay, color = period)) +
++   geom_smooth(method = "lm", se = FALSE) +
++   labs(title = "Predicted Delays by Period", x = "Arrivals (Congestion Proxy)", y = "Predicted Delay") +
++   scale_color_manual(values = c("Pre-COVID" = "blue", "COVID-2020" = "red", "Post-COVID" = "green"))
+`geom_smooth()` using formula = 'y ~ x'
+> 
+> # Step 7: Seasonal Analysis During 2020
+> covid_seasonal <- covid_data %>%
++   mutate(season = case_when(
++     month %in% c(12, 1, 2) ~ "Winter",
++     month %in% c(3, 4, 5) ~ "Spring",
++     month %in% c(6, 7, 8) ~ "Summer",
++     month %in% c(9, 10, 11) ~ "Fall"
++   ))
+> 
+> # **Monthly Delays by Year Graph**
+> # Prepare Data for Monthly Delays by Year (2018-2023)
+> monthly_delays <- Delays %>%
++   mutate(
++     Month = sprintf("%02d", month),  # Ensure Month is in "01" to "12" format
++     Year = as.factor(year)          # Ensure Year is a factor
++   ) %>%
++   group_by(Year, Month) %>%
++   summarize(total_delay = sum(total_delay, na.rm = TRUE), .groups = "drop")
+> 
+> # Convert Month to a factor for proper order and labels
+> monthly_delays$Month <- factor(
++   monthly_delays$Month,
++   levels = sprintf("%02d", 1:12),
++   labels = month.abb
++ )
+> 
+> # Plotting: Total flight delays by month for 2018-2023
+> # Plotting monthly delay trends over multiple years to detect patterns.
+> # This helps identify peak delay periods, which can inform scheduling and resource allocation.
+> ggplot(monthly_delays, aes(x = Month, y = total_delay, color = Year, group = Year)) +
++   geom_line(size = 1) +
++   labs(
++     title = "Total Flight Delays by Month (2018-2023)",
++     x = "Month",
++     y = "Total Delay (Minutes)",
++     color = "Year"
++   ) +
++   theme_minimal() +
++   theme(
++     axis.text.x = element_text(angle = 45, hjust = 1),
++     plot.title = element_text(hjust = 0.5)
++   )
+> 
+> # Step 1: Subset Data for COVID-2020
+> covid_data <- Delays %>% filter(year == 2020)
+> 
+> # Create Dummy Variables for Delay Category and Seasons
+> covid_data <- covid_data %>%
++   mutate(
++     delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay"),
++     season = case_when(
++       month %in% c(12, 1, 2) ~ "Winter",
++       month %in% c(3, 4, 5) ~ "Spring",
++       month %in% c(6, 7, 8) ~ "Summer",
++       month %in% c(9, 10, 11) ~ "Fall"
++     )
++   )
+> 
+> # Step 2: Polynomial Regression for COVID-2020
+> model_poly <- lm(
++   total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) +
++     weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + season,
++   data = covid_data
++ )
+> 
+> # Summary of Polynomial Model
+> summary(model_poly)
+
+Call:
+lm(formula = total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) + 
+    weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + 
+    season, data = covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-34105   -160     -7    142  44659 
+
+Coefficients:
+                   Estimate Std. Error t value Pr(>|t|)    
+(Intercept)      -1.070e+01  1.965e+01  -0.544 0.586289    
+arr_flights       3.904e-01  4.116e-02   9.486  < 2e-16 ***
+I(arr_flights^2)  2.399e-05  9.535e-06   2.516 0.011872 *  
+I(arr_flights^3)  7.173e-10  4.402e-10   1.629 0.103243    
+weather_ct        3.318e+02  6.034e+00  54.996  < 2e-16 ***
+I(weather_ct^2)   5.611e-01  7.953e-02   7.055 1.78e-12 ***
+nas_ct            5.460e+01  6.174e-01  88.441  < 2e-16 ***
+late_aircraft_ct  9.474e+01  7.548e-01 125.518  < 2e-16 ***
+seasonSpring      1.328e+01  2.610e+01   0.509 0.610927    
+seasonSummer     -1.478e+02  2.743e+01  -5.389 7.15e-08 ***
+seasonWinter      9.764e+01  2.603e+01   3.752 0.000176 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1351 on 21724 degrees of freedom
+Multiple R-squared:  0.9309,	Adjusted R-squared:  0.9309 
+F-statistic: 2.929e+04 on 10 and 21724 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 3: Interaction Effects
+> model_interaction <- lm(
++   total_delay ~ arr_flights * weather_ct + nas_ct + late_aircraft_ct +
++     delay_category * season,
++   data = covid_data
++ )
+> 
+> # Summary of Interaction Model
+> summary(model_interaction)
+
+Call:
+lm(formula = total_delay ~ arr_flights * weather_ct + nas_ct + 
+    late_aircraft_ct + delay_category * season, data = covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-34043   -135     27    113  43581 
+
+Coefficients:
+                                       Estimate Std. Error t value Pr(>|t|)    
+(Intercept)                           1.291e+02  4.844e+01   2.665  0.00771 ** 
+arr_flights                           4.886e-01  2.618e-02  18.660  < 2e-16 ***
+weather_ct                            3.173e+02  3.966e+00  79.996  < 2e-16 ***
+nas_ct                                5.269e+01  6.212e-01  84.824  < 2e-16 ***
+late_aircraft_ct                      9.196e+01  7.590e-01 121.159  < 2e-16 ***
+delay_categoryLow Delay              -1.628e+02  5.215e+01  -3.122  0.00180 ** 
+seasonSpring                          1.606e+02  6.642e+01   2.418  0.01563 *  
+seasonSummer                         -5.917e+02  6.382e+01  -9.271  < 2e-16 ***
+seasonWinter                          2.833e+02  5.452e+01   5.196 2.05e-07 ***
+arr_flights:weather_ct                1.566e-02  7.843e-04  19.969  < 2e-16 ***
+delay_categoryLow Delay:seasonSpring -1.600e+02  7.214e+01  -2.218  0.02660 *  
+delay_categoryLow Delay:seasonSummer  5.435e+02  7.041e+01   7.720 1.22e-14 ***
+delay_categoryLow Delay:seasonWinter -3.003e+02  6.211e+01  -4.836 1.34e-06 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1344 on 21722 degrees of freedom
+Multiple R-squared:  0.9317,	Adjusted R-squared:  0.9316 
+F-statistic: 2.468e+04 on 12 and 21722 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 4: Log-Transformed Model for Skewed Data (COVID-2020)
+> covid_data <- covid_data %>% mutate(log_total_delay = log1p(total_delay))
+> 
+> model_log <- lm(
++   log_total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) +
++     weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + season,
++   data = covid_data
++ )
+> 
+> # Summary of Log-Transformed Model
+> summary(model_log)
+
+Call:
+lm(formula = log_total_delay ~ arr_flights + I(arr_flights^2) + 
+    I(arr_flights^3) + weather_ct + I(weather_ct^2) + nas_ct + 
+    late_aircraft_ct + season, data = covid_data)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-13.1616  -0.5891   0.5579   1.2497  14.5780 
+
+Coefficients:
+                   Estimate Std. Error t value Pr(>|t|)    
+(Intercept)       4.439e+00  2.840e-02 156.284  < 2e-16 ***
+arr_flights       3.687e-03  5.949e-05  61.976  < 2e-16 ***
+I(arr_flights^2) -7.097e-07  1.378e-08 -51.500  < 2e-16 ***
+I(arr_flights^3)  2.750e-11  6.362e-13  43.219  < 2e-16 ***
+weather_ct        1.575e-01  8.720e-03  18.061  < 2e-16 ***
+I(weather_ct^2)  -1.897e-03  1.149e-04 -16.502  < 2e-16 ***
+nas_ct            4.428e-03  8.923e-04   4.963 7.01e-07 ***
+late_aircraft_ct  4.404e-03  1.091e-03   4.038 5.42e-05 ***
+seasonSpring     -8.853e-01  3.772e-02 -23.470  < 2e-16 ***
+seasonSummer      3.660e-02  3.964e-02   0.923    0.356    
+seasonWinter      8.392e-01  3.761e-02  22.311  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1.952 on 21724 degrees of freedom
+Multiple R-squared:  0.3786,	Adjusted R-squared:  0.3783 
+F-statistic:  1324 on 10 and 21724 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 5: Comparative Analysis (Pre-, COVID-, and Post-COVID Periods)
+> # Subset data for pre- and post-COVID periods
+> pre_covid_data <- Delays %>% filter(year < 2020)
+> post_covid_data <- Delays %>% filter(year > 2020)
+> 
+> # Fit regression models for each period
+> model_pre_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = pre_covid_data)
+> model_post_covid <- lm(total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct, data = post_covid_data)
+> 
+> # Summaries of models
+> summary(model_pre_covid)
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct + 
+    late_aircraft_ct, data = pre_covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-87756   -319    -20    247  65827 
+
+Coefficients:
+                  Estimate Std. Error t value Pr(>|t|)    
+(Intercept)       22.11574   11.38270   1.943    0.052 .  
+arr_flights       -1.65358    0.03268 -50.601   <2e-16 ***
+weather_ct       340.19454    3.02337 112.522   <2e-16 ***
+nas_ct            87.40651    0.32784 266.613   <2e-16 ***
+late_aircraft_ct  99.27917    0.45918 216.212   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 2365 on 48670 degrees of freedom
+Multiple R-squared:  0.961,	Adjusted R-squared:  0.961 
+F-statistic: 3.001e+05 on 4 and 48670 DF,  p-value: < 2.2e-16
+
+> summary(model_post_covid)
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct + 
+    late_aircraft_ct, data = post_covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-58981   -312     11    234  89397 
+
+Coefficients:
+                  Estimate Std. Error t value Pr(>|t|)    
+(Intercept)      -66.30631   12.85508  -5.158 2.51e-07 ***
+arr_flights        1.68450    0.03416  49.308  < 2e-16 ***
+weather_ct       382.10093    2.13623 178.867  < 2e-16 ***
+nas_ct            58.52466    0.48731 120.097  < 2e-16 ***
+late_aircraft_ct  90.39105    0.41624 217.159  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 2696 on 49517 degrees of freedom
+Multiple R-squared:  0.9444,	Adjusted R-squared:  0.9443 
+F-statistic: 2.101e+05 on 4 and 49517 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 6: Hypothesis Testing and Joint Significance (COVID-2020)
+> # Hypothesis Test for Higher-Order Terms in Polynomial Model
+> linearHypothesis(model_poly, c("I(arr_flights^2) = 0", "I(arr_flights^3) = 0"))
+
+Linear hypothesis test:
+I(arr_flights^2) = 0
+I(arr_flights^3) = 0
+
+Model 1: restricted model
+Model 2: total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) + 
+    weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + 
+    season
+
+  Res.Df        RSS Df Sum of Sq      F    Pr(>F)    
+1  21726 4.0089e+10                                  
+2  21724 3.9644e+10  2 445382084 122.03 < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+> 
+> # Breusch-Pagan Test for Heteroskedasticity
+> bptest(model_poly)
+
+	studentized Breusch-Pagan test
+
+data:  model_poly
+BP = 6098.4, df = 10, p-value < 2.2e-16
+
+> 
+> # Step 7: Visualization
+> # Compare Predicted Delays Across Periods
+> covid_data$predicted_delay <- predict(model_poly)
+> pre_covid_data$predicted_delay <- predict(model_pre_covid)
+> post_covid_data$predicted_delay <- predict(model_post_covid)
+> 
+> combined_data <- bind_rows(
++   covid_data %>% mutate(period = "COVID-2020"),
++   pre_covid_data %>% mutate(period = "Pre-COVID"),
++   post_covid_data %>% mutate(period = "Post-COVID")
++ )
+> 
+> # Visualization: Predicted Delays by Period
+> ggplot(combined_data, aes(x = arr_flights, y = predicted_delay, color = period)) +
++   geom_smooth(method = "lm", se = FALSE) +
++   labs(title = "Predicted Delays by Period", x = "Arrivals (Congestion Proxy)", y = "Predicted Delay") +
++   scale_color_manual(values = c("Pre-COVID" = "blue", "COVID-2020" = "red", "Post-COVID" = "green"))
+`geom_smooth()` using formula = 'y ~ x'
+> 
+> # Visualization: Residuals for Polynomial Model
+> par(mfrow = c(1, 1))
+> plot(residuals(model_poly) ~ fitted(model_poly),
++      main = "Residuals vs Fitted (Polynomial Model)",
++      xlab = "Fitted Values", ylab = "Residuals", col = rgb(0.5, 0.5, 0.5, alpha = 0.5), pch = 16)
+> abline(h = 0, col = "red", lwd = 2)
+> 
+> # Visualization: Seasonal Analysis (COVID-2020)
+> covid_seasonal <- covid_data %>%
++   mutate(season = case_when(
++     month %in% c(12, 1, 2) ~ "Winter",
++     month %in% c(3, 4, 5) ~ "Spring",
++     month %in% c(6, 7, 8) ~ "Summer",
++     month %in% c(9, 10, 11) ~ "Fall"
++   ))
+> 
+> ggplot(covid_seasonal, aes(x = season, y = total_delay, fill = season)) +
++   stat_summary(fun = "mean", geom = "bar") +
++   labs(title = "Average Delays by Season in 2020", x = "Season", y = "Average Total Delay")
+> # Step 1: Data Preparation
+> # Subset Data for COVID-2020
+> covid_data <- Delays %>%
++   filter(year == 2020) %>%
++   mutate(
++     delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay"),
++     season = case_when(
++       month %in% c(12, 1, 2) ~ "Winter",
++       month %in% c(3, 4, 5) ~ "Spring",
++       month %in% c(6, 7, 8) ~ "Summer",
++       month %in% c(9, 10, 11) ~ "Fall"
++     )
++   ) %>%
++   drop_na(arr_flights, weather_ct, nas_ct, late_aircraft_ct, season, delay_category)
+> 
+> # Convert `delay_category` to Factor and Clean Levels
+> covid_data$delay_category <- as.factor(covid_data$delay_category)
+> 
+> # Step 2: Ordinary Least Squares (OLS) Model
+> ols_model <- lm(
++   total_delay ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + season,
++   data = covid_data
++ )
+> 
+> # OLS Model Summary
+> summary(ols_model)
+
+Call:
+lm(formula = total_delay ~ arr_flights + weather_ct + nas_ct + 
+    late_aircraft_ct + season, data = covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-33576   -146     22    172  45101 
+
+Coefficients:
+                   Estimate Std. Error t value Pr(>|t|)    
+(Intercept)       -55.62599   19.39372  -2.868  0.00413 ** 
+arr_flights         0.56305    0.02448  22.998  < 2e-16 ***
+weather_ct        361.95770    3.12374 115.873  < 2e-16 ***
+nas_ct             55.47871    0.61599  90.064  < 2e-16 ***
+late_aircraft_ct   94.43852    0.75600 124.919  < 2e-16 ***
+seasonSpring       24.15047   26.28532   0.919  0.35822    
+seasonSummer     -163.19410   27.50932  -5.932 3.03e-09 ***
+seasonWinter       83.16445   26.20909   3.173  0.00151 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1362 on 21727 degrees of freedom
+Multiple R-squared:  0.9298,	Adjusted R-squared:  0.9298 
+F-statistic: 4.11e+04 on 7 and 21727 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 3: Polynomial Regression
+> poly_model <- lm(
++   total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) +
++     weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + season,
++   data = covid_data
++ )
+> 
+> # Polynomial Model Summary
+> summary(poly_model)
+
+Call:
+lm(formula = total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) + 
+    weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + 
+    season, data = covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-34105   -160     -7    142  44659 
+
+Coefficients:
+                   Estimate Std. Error t value Pr(>|t|)    
+(Intercept)      -1.070e+01  1.965e+01  -0.544 0.586289    
+arr_flights       3.904e-01  4.116e-02   9.486  < 2e-16 ***
+I(arr_flights^2)  2.399e-05  9.535e-06   2.516 0.011872 *  
+I(arr_flights^3)  7.173e-10  4.402e-10   1.629 0.103243    
+weather_ct        3.318e+02  6.034e+00  54.996  < 2e-16 ***
+I(weather_ct^2)   5.611e-01  7.953e-02   7.055 1.78e-12 ***
+nas_ct            5.460e+01  6.174e-01  88.441  < 2e-16 ***
+late_aircraft_ct  9.474e+01  7.548e-01 125.518  < 2e-16 ***
+seasonSpring      1.328e+01  2.610e+01   0.509 0.610927    
+seasonSummer     -1.478e+02  2.743e+01  -5.389 7.15e-08 ***
+seasonWinter      9.764e+01  2.603e+01   3.752 0.000176 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1351 on 21724 degrees of freedom
+Multiple R-squared:  0.9309,	Adjusted R-squared:  0.9309 
+F-statistic: 2.929e+04 on 10 and 21724 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 4: Interaction Effects
+> interaction_model <- lm(
++   total_delay ~ arr_flights * weather_ct + nas_ct + late_aircraft_ct + 
++     delay_category * season,
++   data = covid_data
++ )
+> 
+> # Interaction Model Summary
+> summary(interaction_model)
+
+Call:
+lm(formula = total_delay ~ arr_flights * weather_ct + nas_ct + 
+    late_aircraft_ct + delay_category * season, data = covid_data)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-34043   -135     27    113  43581 
+
+Coefficients:
+                                       Estimate Std. Error t value Pr(>|t|)    
+(Intercept)                           1.291e+02  4.844e+01   2.665  0.00771 ** 
+arr_flights                           4.886e-01  2.618e-02  18.660  < 2e-16 ***
+weather_ct                            3.173e+02  3.966e+00  79.996  < 2e-16 ***
+nas_ct                                5.269e+01  6.212e-01  84.824  < 2e-16 ***
+late_aircraft_ct                      9.196e+01  7.590e-01 121.159  < 2e-16 ***
+delay_categoryLow Delay              -1.628e+02  5.215e+01  -3.122  0.00180 ** 
+seasonSpring                          1.606e+02  6.642e+01   2.418  0.01563 *  
+seasonSummer                         -5.917e+02  6.382e+01  -9.271  < 2e-16 ***
+seasonWinter                          2.833e+02  5.452e+01   5.196 2.05e-07 ***
+arr_flights:weather_ct                1.566e-02  7.843e-04  19.969  < 2e-16 ***
+delay_categoryLow Delay:seasonSpring -1.600e+02  7.214e+01  -2.218  0.02660 *  
+delay_categoryLow Delay:seasonSummer  5.435e+02  7.041e+01   7.720 1.22e-14 ***
+delay_categoryLow Delay:seasonWinter -3.003e+02  6.211e+01  -4.836 1.34e-06 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1344 on 21722 degrees of freedom
+Multiple R-squared:  0.9317,	Adjusted R-squared:  0.9316 
+F-statistic: 2.468e+04 on 12 and 21722 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 5: Log-Transformed Model
+> covid_data <- covid_data %>% mutate(log_total_delay = log1p(total_delay))
+> log_model <- lm(
++   log_total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) +
++     weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + season,
++   data = covid_data
++ )
+> 
+> # Log-Transformed Model Summary
+> summary(log_model)
+
+Call:
+lm(formula = log_total_delay ~ arr_flights + I(arr_flights^2) + 
+    I(arr_flights^3) + weather_ct + I(weather_ct^2) + nas_ct + 
+    late_aircraft_ct + season, data = covid_data)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-13.1616  -0.5891   0.5579   1.2497  14.5780 
+
+Coefficients:
+                   Estimate Std. Error t value Pr(>|t|)    
+(Intercept)       4.439e+00  2.840e-02 156.284  < 2e-16 ***
+arr_flights       3.687e-03  5.949e-05  61.976  < 2e-16 ***
+I(arr_flights^2) -7.097e-07  1.378e-08 -51.500  < 2e-16 ***
+I(arr_flights^3)  2.750e-11  6.362e-13  43.219  < 2e-16 ***
+weather_ct        1.575e-01  8.720e-03  18.061  < 2e-16 ***
+I(weather_ct^2)  -1.897e-03  1.149e-04 -16.502  < 2e-16 ***
+nas_ct            4.428e-03  8.923e-04   4.963 7.01e-07 ***
+late_aircraft_ct  4.404e-03  1.091e-03   4.038 5.42e-05 ***
+seasonSpring     -8.853e-01  3.772e-02 -23.470  < 2e-16 ***
+seasonSummer      3.660e-02  3.964e-02   0.923    0.356    
+seasonWinter      8.392e-01  3.761e-02  22.311  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1.952 on 21724 degrees of freedom
+Multiple R-squared:  0.3786,	Adjusted R-squared:  0.3783 
+F-statistic:  1324 on 10 and 21724 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 6: Hypothesis Testing for Polynomial Terms
+> linearHypothesis(poly_model, c("I(arr_flights^2) = 0", "I(arr_flights^3) = 0"))
+
+Linear hypothesis test:
+I(arr_flights^2) = 0
+I(arr_flights^3) = 0
+
+Model 1: restricted model
+Model 2: total_delay ~ arr_flights + I(arr_flights^2) + I(arr_flights^3) + 
+    weather_ct + I(weather_ct^2) + nas_ct + late_aircraft_ct + 
+    season
+
+  Res.Df        RSS Df Sum of Sq      F    Pr(>F)    
+1  21726 4.0089e+10                                  
+2  21724 3.9644e+10  2 445382084 122.03 < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+> 
+> # Step 7: Breusch-Pagan Test for Heteroskedasticity
+> bptest(poly_model)
+
+	studentized Breusch-Pagan test
+
+data:  poly_model
+BP = 6098.4, df = 10, p-value < 2.2e-16
+
+> 
+> # Step 8: Visualization
+> # Residuals vs Fitted (Polynomial Model)
+> par(mfrow = c(1, 1))
+> plot(residuals(poly_model) ~ fitted(poly_model),
++      main = "Residuals vs Fitted (Polynomial Model)",
++      xlab = "Fitted Values", ylab = "Residuals",
++      col = rgb(0.5, 0.5, 0.5, alpha = 0.5), pch = 16)
+> abline(h = 0, col = "red", lwd = 2)
+> 
+> # Predicted Lines by Season
+> to_be_predicted <- data.frame(
++   arr_flights = seq(min(covid_data$arr_flights), max(covid_data$arr_flights), length.out = 100),
++   weather_ct = mean(covid_data$weather_ct),
++   nas_ct = mean(covid_data$nas_ct),
++   late_aircraft_ct = mean(covid_data$late_aircraft_ct),
++   season = "Winter"
++ )
+> to_be_predicted$yhat <- predict(poly_model, newdata = to_be_predicted)
+> 
+> plot(total_delay ~ jitter(arr_flights, factor = 2), pch = 16,
++      col = rgb(0.5, 0.5, 0.5, alpha = 0.2), ylim = c(0, 5000), data = covid_data,
++      xlab = "Arrivals (Congestion Proxy)", ylab = "Total Delays (Minutes)")
+> lines(yhat ~ arr_flights, data = to_be_predicted, col = "blue", lwd = 2)
+> 
+> to_be_predicted$season <- "Summer"
+> to_be_predicted$yhat <- predict(poly_model, newdata = to_be_predicted)
+> lines(yhat ~ arr_flights, data = to_be_predicted, col = "red", lwd = 2, lty = 2)
+> 
+> legend("topright", legend = c("Winter", "Summer"), col = c("blue", "red"), lty = c(1, 2), lwd = 2)
+> 
+> 
+> 
+> #Randomforest vs Decision tree test:
+> 
+> 
+> # Step 1: Data Preparation
+> covid_data <- Delays %>%
++   filter(year == 2020) %>%
++   mutate(
++     delay_category = ifelse(total_delay > 1000, "High Delay", "Low Delay"),
++     season = case_when(
++       month %in% c(12, 1, 2) ~ "Winter",
++       month %in% c(3, 4, 5) ~ "Spring",
++       month %in% c(6, 7, 8) ~ "Summer",
++       month %in% c(9, 10, 11) ~ "Fall"
++     )
++   ) %>%
++   drop_na(arr_flights, weather_ct, nas_ct, late_aircraft_ct, season, delay_category)
+> 
+> covid_data$delay_category <- factor(covid_data$delay_category)
+> covid_data$season <- factor(covid_data$season)
+> 
+> # Step 2: Train-Test Split
+> set.seed(12345)
+> train_indices <- sample(1:nrow(covid_data), 0.8 * nrow(covid_data))
+> train_data <- covid_data[train_indices, ]
+> test_data <- covid_data[-train_indices, ]
+> 
+> # Step 3: Decision Tree Model
+> tree_model <- rpart(
++   delay_category ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + season,
++   data = train_data,
++   method = "class"
++ )
+> 
+> # Plot Decision Tree
+> rpart.plot(tree_model, main = "Decision Tree for Flight Delays")
+> 
+> # Predictions and Confusion Matrix for Decision Tree
+> tree_predictions <- predict(tree_model, newdata = test_data, type = "class")
+> tree_cm <- table(Predicted = tree_predictions, Actual = test_data$delay_category)
+> 
+> # Print Results for Decision Tree
+> print("Confusion Matrix - Decision Tree:")
+[1] "Confusion Matrix - Decision Tree:"
+> print(tree_cm)
+            Actual
+Predicted    High Delay Low Delay
+  High Delay        776       127
+  Low Delay         198      3246
+> tree_accuracy <- sum(diag(tree_cm)) / sum(tree_cm)
+> cat("Decision Tree Accuracy:", round(tree_accuracy, 4), "\n")
+Decision Tree Accuracy: 0.9252 
+> 
+> # Type I and Type II Errors for Decision Tree
+> tree_FP <- tree_cm[1, 2] # False Positives
+> tree_FN <- tree_cm[2, 1] # False Negatives
+> tree_TN <- tree_cm[2, 2] # True Negatives
+> tree_TP <- tree_cm[1, 1] # True Positives
+> 
+> tree_type1_error <- tree_FP / (tree_FP + tree_TN) # False Positive Rate
+> tree_type2_error <- tree_FN / (tree_FN + tree_TP) # False Negative Rate
+> 
+> cat("Decision Tree Type I Error (False Positive Rate):", round(tree_type1_error, 4), "\n")
+Decision Tree Type I Error (False Positive Rate): 0.0377 
+> cat("Decision Tree Type II Error (False Negative Rate):", round(tree_type2_error, 4), "\n")
+Decision Tree Type II Error (False Negative Rate): 0.2033 
+> 
+> # Step 4: Random Forest Model
+> # Training a Random Forest model to classify delays and rank the importance of predictors.
+> # This model is robust to overfitting and can handle complex interactions between variables.
+> rf_model <- randomForest(
++   delay_category ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + season,
++   data = train_data,
++   ntree = 500,
++   mtry = 3,
++   importance = TRUE
++ )
+> 
+> # Predictions and Confusion Matrix for Random Forest
+> rf_predictions <- predict(rf_model, newdata = test_data)
+> rf_cm <- table(Predicted = rf_predictions, Actual = test_data$delay_category)
+> 
+> # Print Results for Random Forest
+> print("Confusion Matrix - Random Forest:")
+[1] "Confusion Matrix - Random Forest:"
+> print(rf_cm)
+            Actual
+Predicted    High Delay Low Delay
+  High Delay        797       110
+  Low Delay         177      3263
+> rf_accuracy <- sum(diag(rf_cm)) / sum(rf_cm)
+> cat("Random Forest Accuracy:", round(rf_accuracy, 4), "\n")
+Random Forest Accuracy: 0.934 
+> 
+> # Type I and Type II Errors for Random Forest
+> rf_FP <- rf_cm[1, 2] # False Positives
+> rf_FN <- rf_cm[2, 1] # False Negatives
+> rf_TN <- rf_cm[2, 2] # True Negatives
+> rf_TP <- rf_cm[1, 1] # True Positives
+> 
+> rf_type1_error <- rf_FP / (rf_FP + rf_TN) # False Positive Rate
+> rf_type2_error <- rf_FN / (rf_FN + rf_TP) # False Negative Rate
+> 
+> cat("Random Forest Type I Error (False Positive Rate):", round(rf_type1_error, 4), "\n")
+Random Forest Type I Error (False Positive Rate): 0.0326 
+> cat("Random Forest Type II Error (False Negative Rate):", round(rf_type2_error, 4), "\n")
+Random Forest Type II Error (False Negative Rate): 0.1817 
+> 
+> # Step 5: Optimized Random Forest Model
+> optimized_rf_model <- randomForest(
++   delay_category ~ arr_flights + weather_ct + nas_ct + late_aircraft_ct + season,
++   data = train_data,
++   ntree = 1000,
++   mtry = 2,
++   importance = TRUE
++ )
+> 
+> # Predictions and Confusion Matrix for Optimized Random Forest
+> optimized_rf_predictions <- predict(optimized_rf_model, newdata = test_data)
+> optimized_rf_cm <- table(Predicted = optimized_rf_predictions, Actual = test_data$delay_category)
+> 
+> # Print Results for Optimized Random Forest
+> print("Confusion Matrix - Optimized Random Forest:")
+[1] "Confusion Matrix - Optimized Random Forest:"
+> print(optimized_rf_cm)
+            Actual
+Predicted    High Delay Low Delay
+  High Delay        791       112
+  Low Delay         183      3261
+> optimized_rf_accuracy <- sum(diag(optimized_rf_cm)) / sum(optimized_rf_cm)
+> cat("Optimized Random Forest Accuracy:", round(optimized_rf_accuracy, 4), "\n")
+Optimized Random Forest Accuracy: 0.9321 
+> 
+> # Type I and Type II Errors for Optimized Random Forest
+> optimized_rf_FP <- optimized_rf_cm[1, 2] # False Positives
+> optimized_rf_FN <- optimized_rf_cm[2, 1] # False Negatives
+> optimized_rf_TN <- optimized_rf_cm[2, 2] # True Negatives
+> optimized_rf_TP <- optimized_rf_cm[1, 1] # True Positives
+> 
+> optimized_rf_type1_error <- optimized_rf_FP / (optimized_rf_FP + optimized_rf_TN) # False Positive Rate
+> optimized_rf_type2_error <- optimized_rf_FN / (optimized_rf_FN + optimized_rf_TP) # False Negative Rate
+> 
+> cat("Optimized Random Forest Type I Error (False Positive Rate):", round(optimized_rf_type1_error, 4), "\n")
+Optimized Random Forest Type I Error (False Positive Rate): 0.0332 
+> cat("Optimized Random Forest Type II Error (False Negative Rate):", round(optimized_rf_type2_error, 4), "\n")
+Optimized Random Forest Type II Error (False Negative Rate): 0.1879 
+> #Secondary hypothesis to look at when comparing the primary hypothesis
+> #Use Passenger Traffic as a Proxy:
+> # Secondary Hypothesis:
+> # Null Hypothesis (H₀): Passenger traffic is not associated with flight delays.
+> #Alternative Hypothesis (H₁): Airports with higher passenger traffic are more likely to experience longer flight delays.
+> 
+> 
+> # Summarize Passenger Traffic and Delays by Airport
+> traffic_delays <- Delays %>%
++   group_by(airport_name) %>%
++   summarize(
++     total_passenger_traffic = sum(arr_flights, na.rm = TRUE),
++     total_delays = sum(total_delay, na.rm = TRUE),
++     avg_delay = mean(total_delay, na.rm = TRUE)
++   ) %>%
++   arrange(desc(total_passenger_traffic))
+> 
+> print(traffic_delays)
+# A tibble: 409 × 4
+   airport_name                                           total_passenger_traffic total_delays avg_delay
+   <chr>                                                                    <dbl>        <dbl>     <dbl>
+ 1 Atlanta, GA: Hartsfield-Jackson Atlanta International                  1693363     15605443    17187.
+ 2 Chicago, IL: Chicago O'Hare International                              1614333     24004246    25162.
+ 3 Dallas/Fort Worth, TX: Dallas/Fort Worth International                 1388818     20091546    25021.
+ 4 Denver, CO: Denver International                                       1328885     16065046    20570.
+ 5 Charlotte, NC: Charlotte Douglas International                         1143055     12012923    13363.
+ 6 Los Angeles, CA: Los Angeles International                             1008026     10844556    14635.
+ 7 Seattle, WA: Seattle/Tacoma International                               866696      7948959    11356.
+ 8 Phoenix, AZ: Phoenix Sky Harbor International                           819776      8795583    11349.
+ 9 Houston, TX: George Bush Intercontinental/Houston                       774074      9596056    11847.
+10 Detroit, MI: Detroit Metro Wayne County                                 726222      7676809     7534.
+# ℹ 399 more rows
+# ℹ Use `print(n = ...)` to see more rows
+> 
+> # Scatter Plot: Passenger Traffic vs Delays
+> # Plotting passenger traffic (proxy for airport size) against delays to identify relationships between traffic volume and delay magnitude.
+> # This helps in understanding how congestion impacts delays across different airport sizes.
+> p_traffic_vs_delays <- ggplot(traffic_delays, aes(x = total_passenger_traffic, y = total_delays)) +
++   geom_point(size = 3, alpha = 0.6, color = "blue") +
++   geom_smooth(method = "lm", se = FALSE, color = "red", linetype = "dashed") +
++   labs(
++     title = "Passenger Traffic vs Total Delays",
++     x = "Total Passenger Traffic (Arrivals)",
++     y = "Total Delays (Minutes)"
++   ) +
++   theme_minimal()
+> 
+> print(p_traffic_vs_delays)
+`geom_smooth()` using formula = 'y ~ x'
+> 
+> # Correlation Test: Passenger Traffic vs Delays
+> cor_test <- cor.test(traffic_delays$total_passenger_traffic, traffic_delays$total_delays)
+> print(cor_test)
+
+	Pearson's product-moment correlation
+
+data:  traffic_delays$total_passenger_traffic and traffic_delays$total_delays
+t = 90.221, df = 407, p-value < 2.2e-16
+alternative hypothesis: true correlation is not equal to 0
+95 percent confidence interval:
+ 0.9707997 0.9801181
+sample estimates:
+      cor 
+0.9758998 
+
+> 
+> # Regression Analysis: Predict Delays Using Traffic
+> delay_model <- lm(total_delays ~ total_passenger_traffic, data = traffic_delays)
+> print(summary(delay_model))
+
+Call:
+lm(formula = total_delays ~ total_passenger_traffic, data = traffic_delays)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-4858959    -2135    23920    40013  5346565 
+
+Coefficients:
+                          Estimate Std. Error t value Pr(>|t|)    
+(Intercept)             -2.858e+04  3.075e+04   -0.93    0.353    
+total_passenger_traffic  1.210e+01  1.341e-01   90.22   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 577500 on 407 degrees of freedom
+Multiple R-squared:  0.9524,	Adjusted R-squared:  0.9523 
+F-statistic:  8140 on 1 and 407 DF,  p-value: < 2.2e-16
+
+> 
+> # Visualize Regression Predictions
+> p_regression <- ggplot(traffic_delays, aes(x = total_passenger_traffic, y = total_delays)) +
++   geom_point(size = 3, alpha = 0.6, color = "blue") +
++   geom_smooth(method = "lm", se = FALSE, color = "red") +
++   labs(
++     title = "Regression: Passenger Traffic Predicting Delays",
++     x = "Total Passenger Traffic (Arrivals)",
++     y = "Total Delays (Minutes)"
++   ) +
++   theme_minimal()
+> 
+> print(p_regression)
+`geom_smooth()` using formula = 'y ~ x'
+> 
+> # Categorize Airports into High and Low Traffic Based on Median
+> traffic_delays <- traffic_delays %>%
++   mutate(traffic_category = ifelse(total_passenger_traffic > median(total_passenger_traffic), "High", "Low"))
+> 
+> # Boxplot: Delays by Traffic Category
+> p_boxplot <- ggplot(traffic_delays, aes(x = traffic_category, y = total_delays, fill = traffic_category)) +
++   geom_boxplot() +
++   labs(
++     title = "Delays by Passenger Traffic Category",
++     x = "Traffic Category",
++     y = "Total Delays (Minutes)"
++   ) +
++   theme_minimal()
+> 
+> print(p_boxplot)
+> 
+> # T-Test: Compare Delays Between High and Low Traffic Airports
+> t_test_result <- t.test(total_delays ~ traffic_category, data = traffic_delays)
+> print(t_test_result)
+
+	Welch Two Sample t-test
+
+data:  total_delays by traffic_category
+t = 7.7547, df = 203.06, p-value = 4.202e-13
+alternative hypothesis: true difference in means between group High and group Low is not equal to 0
+95 percent confidence interval:
+ 1415624 2380936
+sample estimates:
+mean in group High  mean in group Low 
+        1951897.39           53617.67 
+
+> 
+> 
+> #Look at airport airport size or run way size 
+> # Summarize Passenger Traffic and Delays by Airport
+> size_delays_proxy <- Delays %>%
++   group_by(airport) %>%  # Group by airport code
++   summarize(
++     total_passenger_traffic = sum(arr_flights, na.rm = TRUE),  # Proxy for airport size
++     total_flight_delays = sum(total_delay, na.rm = TRUE),
++     avg_delay = mean(total_delay, na.rm = TRUE)
++   ) %>%
++   arrange(desc(total_passenger_traffic))  #The ordering of proxy passenger traffic 
+> 
+> print(head(size_delays_proxy, 10))  # Display  proxy top airports by size
+# A tibble: 10 × 4
+   airport total_passenger_traffic total_flight_delays avg_delay
+   <chr>                     <dbl>               <dbl>     <dbl>
+ 1 ATL                     1693363            15605443    17187.
+ 2 ORD                     1614333            24004246    25162.
+ 3 DFW                     1388818            20091546    25021.
+ 4 DEN                     1328885            16065046    20570.
+ 5 CLT                     1143055            12012923    13363.
+ 6 LAX                     1008026            10844556    14635.
+ 7 SEA                      866696             7948959    11356.
+ 8 PHX                      819776             8795583    11349.
+ 9 LAS                      780383             8701483    11633.
+10 IAH                      774074             9596056    11847.
+> 
+> # Correlation Test: Passenger Traffic vs. Total Delays
+> cor_test_proxy <- cor.test(size_delays_proxy$total_passenger_traffic, size_delays_proxy$total_flight_delays)
+> print(cor_test_proxy)
+
+	Pearson's product-moment correlation
+
+data:  size_delays_proxy$total_passenger_traffic and size_delays_proxy$total_flight_delays
+t = 88.124, df = 386, p-value < 2.2e-16
+alternative hypothesis: true correlation is not equal to 0
+95 percent confidence interval:
+ 0.9708159 0.9803341
+sample estimates:
+      cor 
+0.9760375 
+
+> 
+> # Scatter Plot: Passenger Traffic (Proxy for Size) vs. Total Delays
+> p_proxy_vs_delay <- ggplot(size_delays_proxy, aes(x = total_passenger_traffic, y = total_flight_delays)) +
++   geom_point(size = 3, alpha = 0.6, color = "blue") +
++   geom_smooth(method = "lm", se = FALSE, color = "red", linetype = "dashed") +
++   labs(
++     title = "Airport Size (Passenger Traffic) vs Total Flight Delays",
++     subtitle = "Using Passenger Traffic as a Proxy for Size",
++     x = "Total Passenger Traffic (Arrivals)",
++     y = "Total Flight Delays (Minutes)"
++   ) +
++   theme_minimal()
+> 
+> print(p_proxy_vs_delay)
+`geom_smooth()` using formula = 'y ~ x'
+> 
+> # Regression Analysis: Predict Delays Using Passenger Traffic
+> proxy_model <- lm(total_flight_delays ~ total_passenger_traffic, data = size_delays_proxy)
+> print(summary(proxy_model))
+
+Call:
+lm(formula = total_flight_delays ~ total_passenger_traffic, data = size_delays_proxy)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-4842000    -5511    23739    40893  5353603 
+
+Coefficients:
+                          Estimate Std. Error t value Pr(>|t|)    
+(Intercept)             -2.926e+04  3.252e+04   -0.90    0.369    
+total_passenger_traffic  1.209e+01  1.372e-01   88.12   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 593000 on 386 degrees of freedom
+Multiple R-squared:  0.9526,	Adjusted R-squared:  0.9525 
+F-statistic:  7766 on 1 and 386 DF,  p-value: < 2.2e-16
+
+> 
+> # Step 1: Data Cleaning and Preparation
+> Delays <- Delays %>%
++   mutate(
++     # Calculate total flight delays
++     total_flight_delays = total_delay,  # Alias for consistency
++     
++     # Calculate delay ratio (delays per arrival flights)
++     delay_ratio = total_delay / arr_flights,  
++     
++     # Calculate total passenger traffic using available columns
++     total_passenger_traffic = if ("dep_flights" %in% names(Delays)) {
++       arr_flights + dep_flights
++     } else {
++       arr_flights
++     },
++     
++     # Create a `season` variable based on the month
++     season = factor(case_when(
++       month %in% c(12, 1, 2) ~ "Winter",
++       month %in% c(3, 4, 5) ~ "Spring",
++       month %in% c(6, 7, 8) ~ "Summer",
++       month %in% c(9, 10, 11) ~ "Fall"
++     ))
++   ) %>%
++   # Drop rows with missing values in the specified columns
++   drop_na(total_flight_delays, total_passenger_traffic, season, weather_ct)
+> 
+> # Step 2: Interaction Model
+> interaction_model <- lm(
++   total_flight_delays ~ total_passenger_traffic * season + weather_ct,
++   data = Delays
++ )
+> 
+> # Step 3: Dynamically Extract Coefficient Names
+> coef_names <- names(coef(interaction_model))
+> print("Coefficients in the model:")
+[1] "Coefficients in the model:"
+> print(coef_names)
+[1] "(Intercept)"                          "total_passenger_traffic"             
+[3] "seasonSpring"                         "seasonSummer"                        
+[5] "seasonWinter"                         "weather_ct"                          
+[7] "total_passenger_traffic:seasonSpring" "total_passenger_traffic:seasonSummer"
+[9] "total_passenger_traffic:seasonWinter"
+> 
+> # Extract specific coefficient names for interaction terms
+> interaction_terms <- coef_names[grep("total_passenger_traffic:season", coef_names)]
+> print("Interaction terms in the model:")
+[1] "Interaction terms in the model:"
+> print(interaction_terms)
+[1] "total_passenger_traffic:seasonSpring" "total_passenger_traffic:seasonSummer"
+[3] "total_passenger_traffic:seasonWinter"
+> 
+> # Hypothesis Testing for Interaction Terms
+> if (length(interaction_terms) > 0) {
++   hypothesis_results <- linearHypothesis(interaction_model, interaction_terms)
++   print("Hypothesis Testing Results for Interaction Terms:")
++   print(hypothesis_results)
++ } else {
++   print("No interaction terms found for hypothesis testing.")
++ }
+[1] "Hypothesis Testing Results for Interaction Terms:"
+
+Linear hypothesis test:
+total_passenger_traffic:seasonSpring = 0
+total_passenger_traffic:seasonSummer = 0
+total_passenger_traffic:seasonWinter = 0
+
+Model 1: restricted model
+Model 2: total_flight_delays ~ total_passenger_traffic * season + weather_ct
+
+  Res.Df        RSS Df  Sum of Sq      F    Pr(>F)    
+1 119926 2.4661e+12                                   
+2 119923 2.3661e+12  3 1.0004e+11 1690.2 < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+> 
+> # Step 4: Visualization of Interaction Effects
+> # Create a dataset for predictions
+> prediction_data <- expand.grid(
++   total_passenger_traffic = seq(min(Delays$total_passenger_traffic, na.rm = TRUE), max(Delays$total_passenger_traffic, na.rm = TRUE), length.out = 100),
++   season = levels(Delays$season),
++   weather_ct = mean(Delays$weather_ct, na.rm = TRUE)
++ )
+> 
+> # Predict delays based on the interaction model
+> prediction_data$predicted_delays <- predict(interaction_model, newdata = prediction_data)
+> 
+> # Plot the interaction effects
+> interaction_plot <- ggplot(prediction_data, aes(x = total_passenger_traffic, y = predicted_delays, color = season)) +
++   geom_line(size = 1.5) +
++   scale_color_manual(
++     values = c("Winter" = "blue", "Spring" = "green", "Summer" = "purple", "Fall" = "black")
++   ) +
++   labs(
++     title = "Interaction Effects: Passenger Traffic and Seasons on Flight Delays",
++     subtitle = "Analyzing the Impact of Seasons and Traffic on Delays",
++     x = "Total Passenger Traffic (Arrivals)",
++     y = "Predicted Total Flight Delays (Minutes)",
++     color = "Season"
++   ) +
++   theme_minimal() +
++   theme(
++     plot.title = element_text(hjust = 0.5, face = "bold"),
++     plot.subtitle = element_text(hjust = 0.5),
++     axis.title = element_text(size = 12),
++     legend.position = "top",
++     legend.title = element_text(face = "bold")
++   )
+> 
+> # Print the interaction plot
+> print(interaction_plot)
+> # Additional Visualization: Residuals for the Interaction Model
+> residuals_plot <- ggplot(data = data.frame(
++   Residuals = residuals(interaction_model),
++   Fitted = fitted(interaction_model)
++ ), aes(x = Fitted, y = Residuals)) +
++   geom_point(alpha = 0.6, color = "blue") +
++   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
++   labs(
++     title = "Residuals vs Fitted Values",
++     x = "Fitted Values",
++     y = "Residuals"
++   ) +
++   theme_minimal()
+> 
+> # Print the residuals plot
+> print(residuals_plot)
+> 
+> # Summary of Interaction Model
+> interaction_summary <- summary(interaction_model)
+> print("Summary of Interaction Model:")
+[1] "Summary of Interaction Model:"
+> print(interaction_summary)
+
+Call:
+lm(formula = total_flight_delays ~ total_passenger_traffic * 
+    season + weather_ct, data = Delays)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-105588    -533    -111     241  141148 
+
+Coefficients:
+                                      Estimate Std. Error t value Pr(>|t|)    
+(Intercept)                           50.53017   27.36433   1.847   0.0648 .  
+total_passenger_traffic                7.30934    0.03235 225.950   <2e-16 ***
+seasonSpring                         -23.76702   38.68461  -0.614   0.5390    
+seasonSummer                         -73.02781   38.76125  -1.884   0.0596 .  
+seasonWinter                         -42.72168   38.01027  -1.124   0.2610    
+weather_ct                           471.23790    2.95627 159.403   <2e-16 ***
+total_passenger_traffic:seasonSpring   0.60147    0.04337  13.867   <2e-16 ***
+total_passenger_traffic:seasonSummer   2.93734    0.04465  65.793   <2e-16 ***
+total_passenger_traffic:seasonWinter   1.79379    0.04375  41.005   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 4442 on 119923 degrees of freedom
+Multiple R-squared:  0.8327,	Adjusted R-squared:  0.8327 
+F-statistic: 7.463e+04 on 8 and 119923 DF,  p-value: < 2.2e-16
+
+> 
+> 
+> 
+> #log models for regression and polynomial functions 
+> 
+> # Apply logarithmic transformations
+> Delays <- Delays %>%
++   mutate(
++     log_total_delay = log1p(total_delay),  # Log-transformed delay (log1p handles 0)
++     log_arr_flights = log1p(arr_flights),  # Log-transformed arrivals
++     log_weather_ct = log1p(weather_ct),    # Log-transformed weather
++     log_nas_ct = log1p(nas_ct),            # Log-transformed NAS delay
++     log_late_aircraft_ct = log1p(late_aircraft_ct)  # Log-transformed late aircraft
++   )
+> 
+> # Polynomial Regression Model (Including Log-Transformed Variables)
+> poly_model_log <- lm(
++   log_total_delay ~ poly(log_arr_flights, 2) + poly(log_weather_ct, 2) + 
++     poly(log_nas_ct, 2) + poly(log_late_aircraft_ct, 2) + season,
++   data = Delays
++ )
+> 
+> # Summary of the polynomial regression model
+> summary(poly_model_log)
+
+Call:
+lm(formula = log_total_delay ~ poly(log_arr_flights, 2) + poly(log_weather_ct, 
+    2) + poly(log_nas_ct, 2) + poly(log_late_aircraft_ct, 2) + 
+    season, data = Delays)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-4.8985 -0.4035  0.0041  0.4847  7.2062 
+
+Coefficients:
+                                 Estimate Std. Error  t value Pr(>|t|)    
+(Intercept)                     6.375e+00  5.699e-03 1118.515  < 2e-16 ***
+poly(log_arr_flights, 2)1       2.123e+02  2.276e+00   93.267  < 2e-16 ***
+poly(log_arr_flights, 2)2      -1.701e+02  1.674e+00 -101.632  < 2e-16 ***
+poly(log_weather_ct, 2)1        1.196e+02  1.503e+00   79.575  < 2e-16 ***
+poly(log_weather_ct, 2)2        2.346e+01  1.127e+00   20.812  < 2e-16 ***
+poly(log_nas_ct, 2)1            1.326e+02  1.996e+00   66.443  < 2e-16 ***
+poly(log_nas_ct, 2)2           -1.230e+01  1.521e+00   -8.085 6.28e-16 ***
+poly(log_late_aircraft_ct, 2)1  3.004e+02  2.183e+00  137.576  < 2e-16 ***
+poly(log_late_aircraft_ct, 2)2 -6.747e+01  1.611e+00  -41.889  < 2e-16 ***
+seasonSpring                   -1.229e-01  7.977e-03  -15.401  < 2e-16 ***
+seasonSummer                    6.829e-02  8.245e-03    8.283  < 2e-16 ***
+seasonWinter                    1.476e-01  7.908e-03   18.666  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.9672 on 119920 degrees of freedom
+Multiple R-squared:  0.8114,	Adjusted R-squared:  0.8114 
+F-statistic: 4.69e+04 on 11 and 119920 DF,  p-value: < 2.2e-16
+
+> 
+> # Hypothesis testing for higher-order terms
+> linearHypothesis(poly_model_log, c(
++   "poly(log_arr_flights, 2)2 = 0", 
++   "poly(log_weather_ct, 2)2 = 0"
++ ))
+
+Linear hypothesis test:
+poly(log_arr_flights, 2)2 = 0
+poly(log_weather_ct, 2)2 = 0
+
+Model 1: restricted model
+Model 2: log_total_delay ~ poly(log_arr_flights, 2) + poly(log_weather_ct, 
+    2) + poly(log_nas_ct, 2) + poly(log_late_aircraft_ct, 2) + 
+    season
+
+  Res.Df    RSS Df Sum of Sq      F    Pr(>F)    
+1 119922 121890                                  
+2 119920 112178  2    9711.6 5190.9 < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+> 
+> # Visualization: Polynomial Regression Predictions
+> predicted_poly <- data.frame(
++   arr_flights = seq(min(Delays$arr_flights), max(Delays$arr_flights), length.out = 100),
++   weather_ct = mean(Delays$weather_ct, na.rm = TRUE),
++   nas_ct = mean(Delays$nas_ct, na.rm = TRUE),
++   late_aircraft_ct = mean(Delays$late_aircraft_ct, na.rm = TRUE),
++   season = "Winter"
++ )
+> 
+> # Add log-transformed predictors
+> predicted_poly <- predicted_poly %>%
++   mutate(
++     log_arr_flights = log1p(arr_flights),
++     log_weather_ct = log1p(weather_ct),
++     log_nas_ct = log1p(nas_ct),
++     log_late_aircraft_ct = log1p(late_aircraft_ct)
++   )
+> 
+> predicted_poly$yhat <- predict(poly_model_log, newdata = predicted_poly)
+> 
+> # Plot predictions for Polynomial Regression
+> ggplot(predicted_poly, aes(x = arr_flights, y = exp(yhat) - 1)) +  # Convert back from log
++   geom_line(color = "blue", size = 1) +
++   labs(
++     title = "Polynomial Regression with Log-Transformed Variables",
++     x = "Arrivals (Congestion Proxy)",
++     y = "Predicted Total Delays (Minutes)"
++   ) +
++   theme_minimal()
+> # Add Relevant Variables to the Dataset
+> Delays <- Delays %>%
++   mutate(
++     log_total_delay = log1p(total_delay),  # Log-transformation for skewed delays
++     congestion_proxy = log1p(arr_flights),  # Log-transform arrivals for non-linear relationships
++     season = factor(case_when(
++       month %in% c(12, 1, 2) ~ "Winter",
++       month %in% c(3, 4, 5) ~ "Spring",
++       month %in% c(6, 7, 8) ~ "Summer",
++       month %in% c(9, 10, 11) ~ "Fall"
++     )),
++     operational_issues = nas_ct + late_aircraft_ct + security_delay,  # Proxy for inefficiencies
++     weather_intensity = weather_ct  # Retain weather conditions as-is
++   )
+> 
+> # Polynomial Regression Model with Additional Factors
+> poly_model <- lm(
++   log_total_delay ~ poly(congestion_proxy, 3) + weather_intensity + operational_issues + season,
++   data = Delays
++ )
+> 
+> # Summary of the Updated Model
+> summary(poly_model)
+
+Call:
+lm(formula = log_total_delay ~ poly(congestion_proxy, 3) + weather_intensity + 
+    operational_issues + season, data = Delays)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-7.2503 -0.4575  0.1343  0.6457  7.2150 
+
+Coefficients:
+                             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)                 6.136e+00  7.087e-03  865.79   <2e-16 ***
+poly(congestion_proxy, 3)1  5.735e+02  1.736e+00  330.39   <2e-16 ***
+poly(congestion_proxy, 3)2 -1.518e+02  1.721e+00  -88.17   <2e-16 ***
+poly(congestion_proxy, 3)3 -2.986e+01  1.451e+00  -20.57   <2e-16 ***
+weather_intensity           1.599e-02  7.310e-04   21.88   <2e-16 ***
+operational_issues          2.100e-03  5.230e-05   40.14   <2e-16 ***
+seasonSpring               -1.343e-01  9.696e-03  -13.85   <2e-16 ***
+seasonSummer                3.773e-01  9.788e-03   38.54   <2e-16 ***
+seasonWinter                3.546e-01  9.534e-03   37.19   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1.177 on 119923 degrees of freedom
+Multiple R-squared:  0.7209,	Adjusted R-squared:  0.7208 
+F-statistic: 3.871e+04 on 8 and 119923 DF,  p-value: < 2.2e-16
+
+> 
+> # Predictions for Polynomial Model
+> Delays$predicted_delays <- predict(poly_model, newdata = Delays)
+> 
+> # Visualization of the Updated Model
+> ggplot(Delays, aes(x = congestion_proxy, y = log_total_delay)) +
++   geom_point(alpha = 0.3, color = "gray") +
++   geom_smooth(method = "lm", formula = y ~ poly(x, 3), se = FALSE, color = "blue", size = 1.2) +
++   labs(
++     title = "Polynomial Regression with Additional Factors",
++     subtitle = "Examining Congestion, Weather, Seasonality, and Operational Issues",
++     x = "Log of Arrivals (Congestion Proxy)",
++     y = "Log of Total Delays (Minutes)"
++   ) +
++   theme_minimal()
+> 
+> 
+> # Interaction Effects (Seasonality and Weather)
+> interaction_model <- lm(
++   log_total_delay ~ poly(congestion_proxy, 3) * season + weather_intensity + operational_issues,
++   data = Delays
++ )
+> 
+> # Summary of Interaction Effects Model
+> summary(interaction_model)
+
+Call:
+lm(formula = log_total_delay ~ poly(congestion_proxy, 3) * season + 
+    weather_intensity + operational_issues, data = Delays)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-7.8564 -0.4518  0.1400  0.6291  7.2822 
+
+Coefficients:
+                                          Estimate Std. Error t value Pr(>|t|)    
+(Intercept)                              6.126e+00  7.079e-03 865.362  < 2e-16 ***
+poly(congestion_proxy, 3)1               5.713e+02  2.587e+00 220.808  < 2e-16 ***
+poly(congestion_proxy, 3)2              -1.405e+02  2.553e+00 -55.044  < 2e-16 ***
+poly(congestion_proxy, 3)3              -2.436e+01  2.426e+00 -10.041  < 2e-16 ***
+seasonSpring                            -1.340e-01  9.664e-03 -13.867  < 2e-16 ***
+seasonSummer                             3.689e-01  9.765e-03  37.779  < 2e-16 ***
+seasonWinter                             3.479e-01  9.503e-03  36.607  < 2e-16 ***
+weather_intensity                        1.995e-02  7.572e-04  26.351  < 2e-16 ***
+operational_issues                       2.240e-03  5.267e-05  42.525  < 2e-16 ***
+poly(congestion_proxy, 3)1:seasonSpring  4.094e+01  3.299e+00  12.409  < 2e-16 ***
+poly(congestion_proxy, 3)2:seasonSpring -1.217e+01  3.248e+00  -3.748 0.000178 ***
+poly(congestion_proxy, 3)3:seasonSpring -2.555e+01  3.274e+00  -7.805 5.99e-15 ***
+poly(congestion_proxy, 3)1:seasonSummer -2.110e+01  3.467e+00  -6.086 1.16e-09 ***
+poly(congestion_proxy, 3)2:seasonSummer -4.676e+01  3.455e+00 -13.532  < 2e-16 ***
+poly(congestion_proxy, 3)3:seasonSummer -2.090e+01  3.402e+00  -6.143 8.10e-10 ***
+poly(congestion_proxy, 3)1:seasonWinter -3.713e+01  3.300e+00 -11.249  < 2e-16 ***
+poly(congestion_proxy, 3)2:seasonWinter -1.276e+01  3.300e+00  -3.867 0.000110 ***
+poly(congestion_proxy, 3)3:seasonWinter  4.103e+00  3.308e+00   1.240 0.214797    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 1.172 on 119914 degrees of freedom
+Multiple R-squared:  0.723,	Adjusted R-squared:  0.723 
+F-statistic: 1.841e+04 on 17 and 119914 DF,  p-value: < 2.2e-16
+
+> 
+> # Plot Interaction Effects: Seasonality
+> interaction_data <- expand.grid(
++   congestion_proxy = seq(min(Delays$congestion_proxy, na.rm = TRUE), max(Delays$congestion_proxy, na.rm = TRUE), length.out = 100),
++   season = levels(Delays$season),
++   weather_intensity = mean(Delays$weather_intensity, na.rm = TRUE),
++   operational_issues = mean(Delays$operational_issues, na.rm = TRUE)
++ )
+> interaction_data$predicted_delays <- predict(interaction_model, newdata = interaction_data)
+> 
+> ggplot(interaction_data, aes(x = congestion_proxy, y = predicted_delays, color = season)) +
++   geom_line(size = 1.2) +
++   labs(
++     title = "Interaction Effects: Congestion and Seasonality",
++     subtitle = "Analyzing Seasonal Impacts on Flight Delays",
++     x = "Log of Arrivals (Congestion Proxy)",
++     y = "Predicted Log Total Delays (Minutes)"
++   ) +
++   theme_minimal()
+>
+
+
+
